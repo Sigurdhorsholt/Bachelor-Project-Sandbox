@@ -7,9 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build": "vite build && rm -rf ../WebApi/wwwroot && mkdir -p ../WebApi/wwwroot && cp -R dist/* ../WebApi/wwwroot/"
+
   },
   "dependencies": {
+    "@microsoft/signalr": "^9.0.6",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
