@@ -1,19 +1,16 @@
 using Application.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata; // <= needed for StoreObjectIdentifier
 
 namespace Application.Persistence;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
-    // Org
+    // DbSets (unchanged)
     public DbSet<Organisation> Organisations => Set<Organisation>();
     public DbSet<Division> Divisions => Set<Division>();
-
-    // Users
     public DbSet<User> Users => Set<User>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
-
-    // Meetings flow
     public DbSet<Meeting> Meetings => Set<Meeting>();
     public DbSet<AgendaItem> AgendaItems => Set<AgendaItem>();
     public DbSet<Proposition> Propositions => Set<Proposition>();
@@ -25,30 +22,32 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void OnModelCreating(ModelBuilder b)
     {
-        // Minimal keys/uniques you relied on in SQL
-        b.Entity<Organisation>().ToTable("Organisation");
-        b.Entity<Division>().ToTable("Division");
+        base.OnModelCreating(b);
 
-        b.Entity<User>().ToTable("Users")
-            .HasIndex(u => u.Email).IsUnique();
+        // Use default 'public' schema
+        b.HasDefaultSchema("public");
 
-        b.Entity<UserRole>().ToTable("UserRoles");
+        // 1) Map each entity to its lowercase table
+        b.Entity<Organisation>().ToTable("organisation");
+        b.Entity<Division>().ToTable("division");
+        b.Entity<User>().ToTable("users");
+        b.Entity<UserRole>().ToTable("userroles");
+        b.Entity<Meeting>().ToTable("meetings");
+        b.Entity<AgendaItem>().ToTable("agendaitems");
+        b.Entity<Proposition>().ToTable("propositions");
+        b.Entity<VoteOption>().ToTable("voteoptions");
+        b.Entity<AdmissionTicket>().ToTable("admissiontickets");
+        b.Entity<Ballot>().ToTable("ballots");
+        b.Entity<Vote>().ToTable("votes");
+        b.Entity<AuditableEvent>().ToTable("auditableevents");
 
-        b.Entity<Meeting>().ToTable("Meetings");
-        b.Entity<AgendaItem>().ToTable("AgendaItems");
-        b.Entity<Proposition>().ToTable("Propositions");
-        b.Entity<VoteOption>().ToTable("VoteOptions");
-        b.Entity<AdmissionTicket>().ToTable("AdmissionTickets")
-            .HasIndex(x => x.Code).IsUnique();
+        // indexes/uniques you rely on
+        b.Entity<User>().HasIndex(u => u.Email).IsUnique();
+        b.Entity<AdmissionTicket>().HasIndex(x => x.Code).IsUnique();
+        b.Entity<Vote>().HasIndex(v => v.BallotId).IsUnique();
+        b.Entity<AuditableEvent>().HasIndex(a => a.VoteId).IsUnique();
 
-        b.Entity<Ballot>().ToTable("Ballots");
-        b.Entity<Vote>().ToTable("Votes")
-            .HasIndex(v => v.BallotId).IsUnique();
-
-        b.Entity<AuditableEvent>().ToTable("AuditableEvents")
-            .HasIndex(a => a.VoteId).IsUnique();
-
-        // Optional: relationships if not using data annotations
+        // relationships (same as before)
         b.Entity<Division>()
             .HasOne(d => d.Organisation)
             .WithMany(o => o.Divisions)
@@ -106,16 +105,32 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         b.Entity<Vote>()
             .HasOne(v => v.Ballot)
-            .WithOne(b => b.Vote)
+            .WithOne(bal => bal.Vote)
             .HasForeignKey<Vote>(v => v.BallotId);
 
         b.Entity<AuditableEvent>()
             .HasOne(a => a.Vote)
             .WithOne(v => v.AuditableEvent)
             .HasForeignKey<AuditableEvent>(a => a.VoteId);
+
+        // 2) Make **all column names** lowercase to match your physical columns
+        foreach (var entity in b.Model.GetEntityTypes())
+        {
+            var table = entity.GetTableName();
+            var schema = entity.GetSchema();
+            if (table is null) continue;
+
+            foreach (var prop in entity.GetProperties())
+            {
+                // figure out current store column name and force lowercase
+                var storeObject = StoreObjectIdentifier.Table(table, schema);
+                var current = prop.GetColumnName(storeObject);
+                if (!string.IsNullOrEmpty(current))
+                    prop.SetColumnName(current!.ToLowerInvariant());
+            }
+        }
     }
 
-    // Enforce FK in SQLite (safety if not set in connection string)
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         => optionsBuilder.EnableSensitiveDataLogging(); // dev-only
 }

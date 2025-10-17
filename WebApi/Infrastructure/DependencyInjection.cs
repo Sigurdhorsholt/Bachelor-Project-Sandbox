@@ -1,11 +1,9 @@
 using Application.Persistence;
-
-namespace WebApi.Infrastructure;
-
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+
+namespace WebApi.Infrastructure;
 
 public static class DependencyInjection
 {
@@ -14,12 +12,14 @@ public static class DependencyInjection
         IConfiguration config)
     {
         var cs = config.GetConnectionString("Default")
-                 ?? "Data Source=identifier.sqlite;Cache=Shared;Foreign Keys=True";
+                 ?? "Host=localhost;Database=bachelordb;Username=postgres;Password=postgres;SSL Mode=Require;Trust Server Certificate=true";
 
-        // No need for a singleton connection; let EF manage them normally.
         services.AddDbContext<AppDbContext>(opt =>
-            opt.UseSqlite(cs)
+            opt.UseNpgsql(cs)
                 .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
+
+        // Optional: smooth DateTime behavior in older code paths
+        AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
         return services;
     }
