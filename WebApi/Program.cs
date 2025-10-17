@@ -1,11 +1,15 @@
 using Application;
 using Application.Abstractions;
+using Application.Persistence;
 using Application.Services;
+using Microsoft.EntityFrameworkCore;
+using WebApi.Infrastructure;
 using WebApi.Realtime;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Services
+builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddCors(opts => 
@@ -15,6 +19,7 @@ builder.Services.AddCors(opts =>
         .AllowAnyMethod()));
 builder.Services.AddSingleton<IGreetingService, GreetingService>();
 builder.Services.AddSignalR();
+builder.Services.AddControllers();
 
 var app = builder.Build();
 
@@ -30,19 +35,24 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts(); // optional for dev, good for prod
 }
 app.UseHttpsRedirection();
-
-// 1) Serve files from wwwroot
-app.UseDefaultFiles(); // serves index.html by default if present
+app.UseDefaultFiles(); 
 app.UseStaticFiles();
-
-// API endpoints
-app.MapGet("/api/ping", () => Results.Ok(new { status = "ok", time = DateTimeOffset.UtcNow }));
-app.MapGet("/api/hello/{name}", (string name, IGreetingService svc) =>
-    Results.Ok(new { message = svc.GetGreeting(name) }));
-
+app.MapControllers();
 app.MapHub<PresenceHub>("/hub/presence");
 
-// 2) SPA Fallback for client-side routing (everything not /api/* or a real file)
+//FAil fast test - if DB doesnt exist we crash here
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    // Don’t run migrations, don’t recreate schema
+    // Just verify the file is accessible
+    await db.Database.OpenConnectionAsync();
+    await db.Database.CloseConnectionAsync();
+}
+
+app.Logger.LogInformation("Using DB: {Path}", 
+    builder.Configuration.GetConnectionString("Default"));
+
 app.MapFallbackToFile("index.html");
 
 app.Run();

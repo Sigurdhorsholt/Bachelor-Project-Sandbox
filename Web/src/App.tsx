@@ -1,91 +1,40 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import * as signalR from "@microsoft/signalr";
+import { useState } from "react";
 
-type UserDto = { connectionId: string; name: string };
+export default function Home() {
+    const [status, setStatus] = useState<string>("");
 
-export default function App() {
-    const [name, setName] = useState("");
-    const [me, setMe] = useState<UserDto | null>(null);
-    const [users, setUsers] = useState<UserDto[]>([]);
-    const connectionRef = useRef<signalR.HubConnection | null>(null);
+    async function testBackend() {
+        try {
+            console.log("Testing backend connection...");
 
-    const connection = useMemo(() => {
-        const conn = new signalR.HubConnectionBuilder()
-            .withUrl("/hub/presence")
-            .withAutomaticReconnect()
-            .build();
-        connectionRef.current = conn;
-        return conn;
-    }, []);
-
-    useEffect(() => {
-        // register handlers
-        connection.on("CurrentUsers", (list: UserDto[]) => setUsers(list));
-        connection.on("UserJoined", (u: UserDto) => {
-            setUsers(prev => {
-                const exists = prev.some(x => x.connectionId === u.connectionId);
-                return exists ? prev : [...prev, u];
-            });
-            if (u.connectionId === connection.connectionId) setMe(u);
-        });
-        connection.on("UserLeft", (connectionId: string) => {
-            setUsers(prev => prev.filter(u => u.connectionId !== connectionId));
-            if (me?.connectionId === connectionId) setMe(null);
-        });
-
-        // start connection
-        connection.start().catch(console.error);
-
-        // graceful leave on tab close
-        const handleBeforeUnload = () => {
-            connection.invoke("Leave").catch(() => {});
-        };
-        window.addEventListener("beforeunload", handleBeforeUnload);
-
-        return () => {
-            window.removeEventListener("beforeunload", handleBeforeUnload);
-            connection.stop();
-        };
-    }, [connection]);
-
-    const join = async () => {
-        if (!name.trim()) return;
-        await connection.invoke("Join", name.trim());
-    };
-
-    const leave = async () => {
-        await connection.invoke("Leave");
-    };
+            const res =await fetch("/api/dev/pingdb", { headers: { Accept: "application/json" } });
+            
+             //await fetch("https://localhost:7029/api/dev/pingdb");
+            
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            console.log("✅ Backend responded:", data);
+            setStatus(`✅ Connected to backend! Found ${data.tables?.length ?? 0} tables.`);
+        } catch (err: any) {
+            console.error("❌ Backend connection failed:", err);
+            setStatus(`❌ Failed to connect: ${err.message}`);
+        }
+    }
 
     return (
-        <main style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
-            <h1>SignalR Presence Sandbox</h1>
+        <div className="min-h-dvh flex flex-col items-center justify-center gap-6 bg-gray-50 p-8">
+            <h1 className="text-2xl font-bold">Backend Connection Test</h1>
 
-            {!me ? (
-                <div>
-                    <input
-                        placeholder="Your name"
-                        value={name}
-                        onChange={e => setName(e.target.value)}
-                        style={{ padding: 8, marginRight: 8 }}
-                    />
-                    <button onClick={join} style={{ padding: 8 }}>Join</button>
-                </div>
-            ) : (
-                <div style={{ marginBottom: 16 }}>
-                    <strong>You:</strong> {me.name} ({me.connectionId})
-                    <button onClick={leave} style={{ marginLeft: 12, padding: 6 }}>Leave</button>
-                </div>
-            )}
+            <button
+                onClick={testBackend}
+                className="rounded-xl bg-blue-600 text-white px-6 py-3 font-medium hover:bg-blue-700"
+            >
+                Test Backend Connection XXXXX
+            </button>
 
-            <h2>Online now</h2>
-            <ul>
-                {users.map(u => (
-                    <li key={u.connectionId}>
-                        {u.name} <small style={{ opacity: 0.6 }}>({u.connectionId})</small>
-                    </li>
-                ))}
-            </ul>
-        </main>
+            <p className="text-gray-700">{status || "Click the button to test."}</p>
+        </div>
     );
 }

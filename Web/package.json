@@ -5,19 +5,21 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "build": "vite build && rm -rf ../WebApi/wwwroot && mkdir -p ../WebApi/wwwroot && cp -R dist/* ../WebApi/wwwroot/"
-
+    "build": "tsc -b && vite build && npm run sync-wwwroot",
+    "sync-wwwroot": "shx rm -rf ../WebApi/wwwroot && shx mkdir -p ../WebApi/wwwroot && shx cp -r dist/* ../WebApi/wwwroot/"
   },
   "dependencies": {
     "@microsoft/signalr": "^9.0.6",
+    "fs": "^0.0.1-security",
+    "path": "^0.12.7",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
+    "@types/node": "^24.8.1",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^5.0.0",
