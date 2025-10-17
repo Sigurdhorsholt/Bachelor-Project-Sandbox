@@ -11,22 +11,34 @@
     "sync-wwwroot": "shx rm -rf ../WebApi/wwwroot && shx mkdir -p ../WebApi/wwwroot && shx cp -r dist/* ../WebApi/wwwroot/"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
     "@microsoft/signalr": "^9.0.6",
+    "@mui/icons-material": "^7.3.4",
+    "@mui/material": "^7.3.4",
+    "@reduxjs/toolkit": "^2.9.1",
     "fs": "^0.0.1-security",
     "path": "^0.12.7",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "react-redux": "^9.2.0",
+    "react-router-dom": "^7.9.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
+    "@tailwindcss/postcss": "^4.1.14",
     "@types/node": "^24.8.1",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^5.0.0",
+    "autoprefixer": "^10.4.21",
     "eslint": "^9.33.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.3.0",
+    "postcss": "^8.5.6",
+    "shx": "^0.4.0",
+    "tailwindcss": "^4.1.14",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.39.1",
     "vite": "^7.1.2"

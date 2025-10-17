@@ -1,8 +1,11 @@
+using System.Text;
 using Application;
 using Application.Abstractions;
 using Application.Persistence;
 using Application.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using WebApi.Infrastructure;
 using WebApi.Realtime;
 
@@ -21,6 +24,23 @@ builder.Services.AddSingleton<IGreetingService, GreetingService>();
 builder.Services.AddSignalR();
 builder.Services.AddControllers();
 
+var jwtKey   = builder.Configuration["Jwt:Key"]    ?? throw new Exception("Jwt:Key missing");
+var jwtIssuer= builder.Configuration["Jwt:Issuer"] ?? "fa-live-mvp";
+var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(o =>
+    {
+        o.TokenValidationParameters = new TokenValidationParameters {
+            ValidateIssuer = true, ValidIssuer = jwtIssuer,
+            ValidateAudience = false,
+            ValidateIssuerSigningKey = true, IssuerSigningKey = signingKey,
+            ValidateLifetime = true, ClockSkew = TimeSpan.FromMinutes(1)
+        };
+    });
+
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -34,6 +54,8 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseHsts(); // optional for dev, good for prod
 }
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseHttpsRedirection();
 app.UseDefaultFiles(); 
 app.UseStaticFiles();
@@ -54,5 +76,8 @@ app.Logger.LogInformation("Using DB: {Path}",
     builder.Configuration.GetConnectionString("Default"));
 
 app.MapFallbackToFile("index.html");
+
+Console.WriteLine(BCrypt.Net.BCrypt.HashPassword("admin"));
+
 
 app.Run();
