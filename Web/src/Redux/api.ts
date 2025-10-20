@@ -29,7 +29,8 @@ const baseQueryWithReauth: BaseQuery = async (args, api, extra) => {
 export const api = createApi({
     reducerPath: "api",
     baseQuery: baseQueryWithReauth,
-    tagTypes: ["Division", "Organisation", "Meeting", "MeetingAccess", "Ticket"],
+    tagTypes: ["Division", "Organisation", "Meeting", "MeetingAccess", "Ticket", "Agenda", "Propositions", "VoteOptions"],
+
     endpoints: (b) => ({
         login: b.mutation<{ accessToken: string; expiresAt: string; email: string; roles: string[] }, { email: string; password: string }>({
             query: (body) => ({ url: "/auth/login", method: "POST", body }),
