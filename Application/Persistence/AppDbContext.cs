@@ -67,6 +67,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasOne(m => m.Division)
             .WithMany(d => d.Meetings)
             .HasForeignKey(m => m.DivisionId);
+        
+        b.Entity<Meeting>().Property(m => m.Status)
+            .HasConversion<int>()
+            .HasDefaultValue(MeetingStatus.Draft);
 
         b.Entity<AgendaItem>()
             .HasOne(a => a.Meeting)

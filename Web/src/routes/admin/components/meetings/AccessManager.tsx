@@ -65,9 +65,8 @@ export default function AccessManager({
                     size="small"
                     disabled={locked}
                 >
-                    <ToggleButton value="qr"><QrCode2Icon fontSize="small" className="mr-1" /> QR only</ToggleButton>
+                    <ToggleButton value="qr"><QrCode2Icon fontSize="small" className="mr-1" /> QR Code and Link</ToggleButton>
                     <ToggleButton value="codes">Verification codes</ToggleButton>
-                    <ToggleButton value="both">Both</ToggleButton>
                 </ToggleButtonGroup>
             </Box>
 

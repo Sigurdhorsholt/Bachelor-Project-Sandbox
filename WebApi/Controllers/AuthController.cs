@@ -48,7 +48,7 @@ public class AuthController : ControllerBase
         return Ok(new LoginResponse(token, expires, user.Email, roles));
     }
 
-    [HttpGet("me")]
+   /* [HttpGet("me")]
     [Authorize]
     public IActionResult Me()
     {
@@ -56,6 +56,40 @@ public class AuthController : ControllerBase
         var roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToArray();
         return Ok(new { email, roles });
     }
+    */
+   
+   [HttpGet("me")]
+   [Authorize]
+   public async Task<IActionResult> Me()
+   {
+       var email = User.Identity?.Name ?? "";
+       var roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToArray();
+
+       // TODO: Adjust to your actual user/org model.
+       // Assuming User has OrganisationId (single org). If many-to-many, join the link table.
+       var user = await _db.Users
+           .Include(u => u.Organisation)
+           .AsNoTracking()
+           .FirstOrDefaultAsync(u => u.Email == email);
+
+       //TODO: Replace Object with a proper DTO class
+       var organisations = new List<object>();
+       if (user?.Organisation != null)
+       {
+           organisations.Add(new { user.Organisation.Id, user.Organisation.Name });
+       }
+
+       return Ok(new
+       {
+           email,
+           roles,
+           organisations
+           // If you add more fields later, keep this the canonical shape for the FE.
+       });
+   }
+
+   
+   
 
     private string IssueJwt(string email, string[] roles, TimeSpan lifetime)
     {

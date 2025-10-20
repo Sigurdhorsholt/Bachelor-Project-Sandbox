@@ -1,11 +1,15 @@
+import React from "react";
 import {
     Paper, Box, Typography, Button, Table, TableHead, TableRow, TableCell, TableBody, Chip,
-    IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem
+    IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import React from "react";
 
-export type Meeting = { id: string; title: string; startsAt: string; status: string };
+// Reuse the SAME union everywhere
+export type MeetingStatus = "Draft" | "Scheduled" | "Published" | "Finished";
+
+// Keep this component-local Meeting shape (UI-facing)
+export type Meeting = { id: string; title: string; startsAt: string; status: MeetingStatus };
 
 type Props = {
     meetings: Meeting[];
@@ -22,7 +26,7 @@ export default function MeetingsTable({
     // --- Dialog state ---
     const [open, setOpen] = React.useState(false);
     const [submitting, setSubmitting] = React.useState(false);
-    const [form, setForm] = React.useState({
+    const [form, setForm] = React.useState<{ title: string; startsAt: string; status: MeetingStatus }>({
         title: "",
         startsAt: "",
         status: "Draft",
@@ -41,7 +45,11 @@ export default function MeetingsTable({
         if (!onCreateMeeting || !canSubmit) return;
         try {
             setSubmitting(true);
-            await onCreateMeeting({ title: form.title.trim(), startsAt: form.startsAt, status: form.status });
+            await onCreateMeeting({
+                title: form.title.trim(),
+                startsAt: form.startsAt,
+                status: form.status, // <- now typed as MeetingStatus
+            });
             handleClose();
         } finally {
             setSubmitting(false);
@@ -120,9 +128,7 @@ export default function MeetingsTable({
             {/* Add Meeting Dialog */}
             <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs">
                 <DialogTitle>Add meeting</DialogTitle>
-
                 <DialogContent>
-                    {/* use Stack for consistent spacing */}
                     <Box sx={{ mt: 1 }}>
                         <Box sx={{ display: "grid", gap: 2 }}>
                             <TextField
@@ -145,7 +151,6 @@ export default function MeetingsTable({
                                 InputLabelProps={{ shrink: true }}
                                 value={form.startsAt}
                                 onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
-                                // optional: prevent weird locale placeholders in some browsers
                                 inputProps={{ placeholder: "YYYY-MM-DDTHH:mm" }}
                             />
 
@@ -157,20 +162,19 @@ export default function MeetingsTable({
                                 variant="outlined"
                                 margin="dense"
                                 value={form.status}
-                                onChange={(e) => setForm({ ...form, status: e.target.value })}
+                                onChange={(e) => setForm({ ...form, status: e.target.value as MeetingStatus })}
                             >
                                 <MenuItem value="Draft">Draft</MenuItem>
                                 <MenuItem value="Scheduled">Scheduled</MenuItem>
                                 <MenuItem value="Published">Published</MenuItem>
+                                <MenuItem value="Finished">Finished</MenuItem>
                             </TextField>
                         </Box>
                     </Box>
                 </DialogContent>
 
                 <DialogActions>
-                    <Button onClick={handleClose} disabled={submitting}>
-                        Cancel
-                    </Button>
+                    <Button onClick={handleClose} disabled={submitting}>Cancel</Button>
                     <Button
                         onClick={handleCreate}
                         variant="contained"
