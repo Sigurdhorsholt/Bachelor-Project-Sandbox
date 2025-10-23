@@ -16,6 +16,7 @@ export type MeetingDto = {
   title: string;
   startsAtUtc: string;
   status: MeetingStatusName; // enum name string
+  meetingCode?: string | undefined; // optional meeting code returned by backend
 };
 
 // List item DTO (division meetings list returns string Status)
@@ -24,6 +25,7 @@ export type MeetingListItemDto = {
   title: string;
   startsAtUtc: string;
   status: MeetingStatusName; // string name
+  meetingCode?: string | undefined; // optional meeting code if backend includes it
 };
 
 // Create meeting request (uses string enum via backend JsonStringEnumConverter)

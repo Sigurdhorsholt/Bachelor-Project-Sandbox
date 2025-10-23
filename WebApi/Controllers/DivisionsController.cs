@@ -5,6 +5,7 @@ using Application.Domain.Entities;
 using Application.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using WebApi.Services;
 
 namespace WebApi.Controllers;
 
@@ -13,10 +14,12 @@ namespace WebApi.Controllers;
 public class DivisionsController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly IMeetingCodeService _codeService;
 
-    public DivisionsController(AppDbContext db)
+    public DivisionsController(AppDbContext db, IMeetingCodeService codeService)
     {
         _db = db;
+        _codeService = codeService;
     }
 
     // GET: /api/divisions/{divisionId}/meetings
@@ -59,24 +62,53 @@ public class DivisionsController : ControllerBase
         if (division == null)
             return NotFound("Division not found.");
 
-        var meeting = new Meeting
+        // Try to create meeting, regenerating code if we hit unique constraint collisions
+        const int maxAttempts = 5;
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
         {
-            Id = Guid.NewGuid(),
-            DivisionId = divisionId,
-            Title = req.Title.Trim(),
-            StartsAtUtc = req.StartsAtUtc,
-            Status = req.Status
-        };
+            string code;
+            try
+            {
+                code = await _codeService.GenerateUniqueCodeAsync();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "Failed to generate meeting code: " + ex.Message);
+            }
 
-        _db.Meetings.Add(meeting);
-        await _db.SaveChangesAsync();
+            var meeting = new Meeting
+            {
+                Id = Guid.NewGuid(),
+                DivisionId = divisionId,
+                Title = req.Title.Trim(),
+                StartsAtUtc = req.StartsAtUtc,
+                Status = req.Status,
+                MeetingCode = code
+            };
 
-        return Ok(new
-        {
-            meeting.Id,
-            meeting.Title,
-            StartsAtUtc = meeting.StartsAtUtc,
-            Status = meeting.Status.ToString()
-        });
+            _db.Meetings.Add(meeting);
+            try
+            {
+                await _db.SaveChangesAsync();
+
+                return Ok(new
+                {
+                    meeting.Id,
+                    meeting.Title,
+                    StartsAtUtc = meeting.StartsAtUtc,
+                    Status = meeting.Status.ToString(),
+                    MeetingCode = meeting.MeetingCode
+                });
+            }
+            catch (DbUpdateException)
+            {
+                // Likely a unique constraint collision on MeetingCode, retry
+                _db.Entry(meeting).State = EntityState.Detached;
+                if (attempt == maxAttempts - 1)
+                    return StatusCode(500, "Failed to save meeting due to meeting code collision. Try again.");
+            }
+        }
+
+        return StatusCode(500, "Failed to create meeting.");
     }
 }

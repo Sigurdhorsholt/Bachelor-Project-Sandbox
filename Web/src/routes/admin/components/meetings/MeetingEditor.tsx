@@ -26,11 +26,13 @@ import {
     usePatchMeetingMutation,
     useCreateAgendaItemMutation,
     useUpdateAgendaItemMutation,
+    useGetTicketsQuery,
+    useGenerateTicketsMutation,
+    useClearTicketsMutation,
+    useReplaceTicketsMutation,
 } from "../../../../Redux/meetingsApi"; // fixed relative path
 import AgendaItemCard from "./components/AgendaItemCard.tsx";
 
-// Local temporary AccessManager state (will be replaced later)
-type TempCode = VerificationCode;
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const toLocalInput = (iso: string) => {
@@ -38,16 +40,19 @@ const toLocalInput = (iso: string) => {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 };
 
-const ALPH = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const makeMeetingCode = () => Array.from({length: 6}, () => ALPH[Math.floor(Math.random() * ALPH.length)]).join("");
-const makeVerificationCode = () => Array.from({length: 8}, () => ALPH[Math.floor(Math.random() * ALPH.length)]).join("");
-
 export default function MeetingEditor() {
     const {id = ""} = useParams();
     const navigate = useNavigate();
 
     // Fetch full meeting (agenda + propositions)
     const {data: meeting, isFetching, isError, refetch} = useGetMeetingFullQuery(id, {skip: !id});
+
+    // Tickets from server
+    const { data: tickets, refetch: refetchTickets } = useGetTicketsQuery(id, { skip: !id });
+    const [generateTickets] = useGenerateTicketsMutation();
+    const [clearTickets] = useClearTicketsMutation();
+    const [replaceTickets] = useReplaceTicketsMutation();
+
     // Draft form state for delayed save
     const [draft, setDraft] = React.useState<{ title: string; startsAtLocal: string; status: string }>({
         title: "",
@@ -61,8 +66,9 @@ export default function MeetingEditor() {
     }, [meeting]);
     // Local access state (still temporary)
     const [accessMode, setAccessMode] = React.useState<AccessMode>("qr");
-    const [meetingCode, setMeetingCode] = React.useState<string>(makeMeetingCode());
-    const [codes, setCodes] = React.useState<TempCode[]>([]);
+    const [meetingCode, setMeetingCode] = React.useState<string>("");
+    // tickets comes from server; default to empty array for convenience
+    const serverCodes = tickets ?? [] as VerificationCode[];
     // Track saving state
     const [saving, setSaving] = React.useState(false);
     const [errorMsg, setErrorMsg] = React.useState<string | null>(null);
@@ -77,6 +83,11 @@ export default function MeetingEditor() {
     const [patchMeeting] = usePatchMeetingMutation();
     const [createAgendaItem] = useCreateAgendaItemMutation();
     const [updateAgendaItem] = useUpdateAgendaItemMutation();
+
+    // When meeting loads/changes, sync meetingCode from server
+    React.useEffect(() => {
+        if (meeting) setMeetingCode(meeting.meetingCode ?? "");
+    }, [meeting]);
 
     // Error handling utility
     function asErrorText(err: any): string {
@@ -180,29 +191,65 @@ export default function MeetingEditor() {
         setAgendaDialogOpen(false);
     }
 
-    // AccessManager placeholder handlers
-    function regenerateMeetingCode() {
-        setMeetingCode(makeMeetingCode());
+    // Regenerate meeting code by calling backend (persisted only if server returns success)
+    async function regenerateMeetingCode() {
+        if (!meeting) return;
+        setSaving(true);
+        setErrorMsg(null);
+        try {
+            const res = await patchMeeting({ meetingId: meeting.id, patch: { regenerateMeetingCode: true } }).unwrap();
+            // res includes meetingCode via transformResponse; update local state and refresh data
+            if (res?.meetingCode) setMeetingCode(res.meetingCode);
+            await refetch();
+        } catch (e: any) {
+            setErrorMsg((e && e.data) ? (e.data as any) : (e.message ?? "Failed to regenerate code"));
+        } finally {
+            setSaving(false);
+        }
     }
 
     function handleChangeAccessMode(mode: AccessMode) {
         setAccessMode(mode);
     }
 
-    function handleGenerateCodes(n: number) {
-        const newOnes: TempCode[] = Array.from({length: n}).map(() => ({
-            id: crypto.randomUUID(),
-            code: makeVerificationCode(),
-            used: false,
-            issuedTo: null,
-        }));
-        setCodes(prev => [...newOnes, ...prev]);
+    async function handleGenerateCodes(n: number) {
+        if (!meeting) return;
+        try {
+            await generateTickets({ meetingId: meeting.id, count: n }).unwrap();
+        } catch (e) {
+            console.error("Failed to generate tickets", e);
+        } finally {
+            try { await refetchTickets?.(); } catch { }
+        }
+    }
+
+    async function handleClearCodes() {
+        if (!meeting) return;
+        try {
+            await clearTickets(meeting.id).unwrap();
+        } catch (e) {
+            console.error("Failed to clear tickets", e);
+        } finally {
+            try { await refetchTickets?.(); } catch { }
+        }
+    }
+
+    async function handleReplaceCodes(n: number) {
+        if (!meeting) return;
+        try {
+            await replaceTickets({ meetingId: meeting.id, count: n }).unwrap();
+        } catch (e) {
+            console.error("Failed to replace tickets", e);
+        } finally {
+            try { await refetchTickets?.(); } catch { }
+        }
     }
 
     function exportCsv() {
         if (!meeting) return;
+        const list = serverCodes;
         const header = "code,used,issuedTo\n";
-        const rows = codes.map(c => `${c.code},${c.used ? "yes" : "no"},${c.issuedTo ?? ""}`).join("\n");
+        const rows = list.map((c: VerificationCode) => `${c.code},${c.used ? "yes" : "no"},${c.issuedTo ?? ""}`).join("\n");
         const blob = new Blob([header + rows], {type: "text/csv;charset=utf-8"});
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
@@ -319,8 +366,10 @@ export default function MeetingEditor() {
                     onRegenerateMeetingCode={regenerateMeetingCode}
                     accessMode={accessMode}
                     onChangeAccessMode={handleChangeAccessMode}
-                    codes={codes}
+                    codes={serverCodes}
                     onGenerateCodes={handleGenerateCodes}
+                    onClearCodes={handleClearCodes}
+                    onReplaceCodes={handleReplaceCodes}
                     onExportCodes={exportCsv}
                     locked={isLocked}
                 />

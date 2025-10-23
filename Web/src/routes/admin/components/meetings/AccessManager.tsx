@@ -27,6 +27,8 @@ export default function AccessManager({
                                           onChangeAccessMode,
                                           codes,
                                           onGenerateCodes,
+                                          onClearCodes,
+                                          onReplaceCodes,
                                           onExportCodes,
                                           locked,
                                       }: {
@@ -39,6 +41,8 @@ export default function AccessManager({
 
     codes: VerificationCode[];
     onGenerateCodes: (count: number) => void;
+    onClearCodes?: () => void;
+    onReplaceCodes?: (count: number) => void;
     onExportCodes?: () => void;
 
     locked?: boolean;   // disable edits when meeting is Finished
@@ -132,17 +136,28 @@ export default function AccessManager({
                             value={count}
                             onChange={(e) => setCount(Math.max(1, Math.min(500, Number(e.target.value || 1))))}
                         />
-                        <Button
-                            variant="contained"
-                            size="small"
-                            disableElevation
-                            startIcon={<AddIcon />}
-                            className="!rounded-lg"
-                            onClick={() => onGenerateCodes(count)}
-                            disabled={locked}
-                        >
-                            Opret {count}
-                        </Button>
+                        {codes && codes.length > 0 ? (
+                            <>
+                                <Button variant="outlined" size="small" className="!rounded-lg" onClick={() => onClearCodes && onClearCodes()} disabled={locked}>
+                                    Ryd koder
+                                </Button>
+                                <Button variant="contained" size="small" disableElevation startIcon={<AutorenewIcon />} className="!rounded-lg" onClick={() => onReplaceCodes && onReplaceCodes(count)} disabled={locked}>
+                                    Opdater {count}
+                                </Button>
+                            </>
+                        ) : (
+                            <Button
+                                variant="contained"
+                                size="small"
+                                disableElevation
+                                startIcon={<AddIcon />}
+                                className="!rounded-lg"
+                                onClick={() => onGenerateCodes(count)}
+                                disabled={locked}
+                            >
+                                Opret {count}
+                            </Button>
+                        )}
                     </Box>
 
                     <Box className="mt-3 w-full overflow-x-auto">

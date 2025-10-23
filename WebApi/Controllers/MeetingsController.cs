@@ -4,6 +4,9 @@ using Application.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
+using System.Linq;
+using Microsoft.Extensions.Logging;
+using WebApi.Services;
 
 namespace WebApi.Controllers;
 
@@ -13,11 +16,13 @@ public class MeetingsController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly ILogger<MeetingsController> _logger;
+    private readonly IMeetingCodeService _codeService;
 
-    public MeetingsController(AppDbContext db, ILogger<MeetingsController> logger)
+    public MeetingsController(AppDbContext db, ILogger<MeetingsController> logger, IMeetingCodeService codeService)
     {
         _db = db;
         _logger = logger;
+        _codeService = codeService;
     }
 
     // GET: /api/meetings/{id}
@@ -37,6 +42,7 @@ public class MeetingsController : ControllerBase
             m.Title,
             StartsAtUtc = m.StartsAtUtc,
             Status = m.Status.ToString(),
+            MeetingCode = m.MeetingCode,
             Agenda = m.AgendaItems.Select(a => new
             {
                 a.Id,
@@ -53,6 +59,9 @@ public class MeetingsController : ControllerBase
         public DateTime? StartsAtUtc { get; set; }
         [JsonConverter(typeof(JsonStringEnumConverter))]
         public MeetingStatus? Status { get; set; }
+
+        // ask backend to regenerate meeting code and persist it
+        public bool? RegenerateMeetingCode { get; set; }
     }
 
     // PATCH: /api/meetings/{id}
@@ -84,6 +93,20 @@ public class MeetingsController : ControllerBase
         if (req.Status is not null)
             meeting.Status = req.Status.Value;
 
+        if (req.RegenerateMeetingCode == true)
+        {
+            try
+            {
+                var code = await _codeService.GenerateUniqueCodeAsync();
+                meeting.MeetingCode = code;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to regenerate meeting code for {MeetingId}", id);
+                return StatusCode(500, "Failed to generate meeting code: " + ex.Message);
+            }
+        }
+
         await _db.SaveChangesAsync();
         // reload no tracking for clean output
         var updated = await _db.Meetings
@@ -98,6 +121,7 @@ public class MeetingsController : ControllerBase
             updated.Title,
             StartsAtUtc = updated.StartsAtUtc,
             Status = updated.Status.ToString(),
+            MeetingCode = updated.MeetingCode,
             Agenda = updated.AgendaItems.Select(a => new
             {
                 a.Id,

@@ -2,6 +2,7 @@ using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using WebApi.Services;
 
 namespace WebApi.Infrastructure;
 
@@ -20,6 +21,12 @@ public static class DependencyInjection
 
         // Optional: smooth DateTime behavior in older code paths
         AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
+        // Meeting code service (scoped so it can use the scoped DbContext)
+        services.AddScoped<IMeetingCodeService, MeetingCodeService>();
+
+        // Admission ticket service (generate/clear/replace verification codes)
+        services.AddScoped<IAdmissionTicketService, AdmissionTicketService>();
 
         return services;
     }

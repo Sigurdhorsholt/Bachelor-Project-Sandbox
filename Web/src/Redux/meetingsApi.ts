@@ -32,6 +32,8 @@ export const meetingsApi = api.injectEndpoints({
                 title: i.title,
                 startsAtUtc: i.startsAtUtc ?? i.StartsAtUtc,
                 status: normalizeStatus(i.status ?? i.Status),
+                // include meetingCode if backend returned it
+                meetingCode: i.meetingCode ?? i.MeetingCode ?? undefined,
             }) as MeetingListItemDto,
         }),
 
@@ -45,6 +47,7 @@ export const meetingsApi = api.injectEndpoints({
                 title: i.title,
                 startsAtUtc: i.startsAtUtc ?? i.StartsAtUtc,
                 status: normalizeStatus(i.status ?? i.Status),
+                meetingCode: i.meetingCode ?? i.MeetingCode ?? undefined,
             }) as MeetingDto,
         }),
 
@@ -60,6 +63,7 @@ export const meetingsApi = api.injectEndpoints({
                 title: raw.title,
                 startsAtUtc: raw.startsAtUtc ?? raw.StartsAtUtc,
                 status: normalizeStatus(raw.status ?? raw.Status),
+                meetingCode: raw.meetingCode ?? raw.MeetingCode ?? undefined,
                 agenda: (raw.agenda ?? raw.Agenda ?? []).map((a: any) => ({
                     id: a.id,
                     title: a.title,
@@ -74,8 +78,8 @@ export const meetingsApi = api.injectEndpoints({
         }),
 
         patchMeeting: b.mutation<
-            { id: string; divisionId: string; title: string; startsAtUtc: string; status: string; agenda?: any[] },
-            { meetingId: string; patch: Partial<{ title: string; startsAtUtc: string; status: MeetingStatus | MeetingStatusName }>; divisionId?: string }
+            { id: string; divisionId: string; title: string; startsAtUtc: string; status: string; agenda?: any[]; meetingCode?: string },
+            { meetingId: string; patch: Partial<{ title: string; startsAtUtc: string; status: MeetingStatus | MeetingStatusName; regenerateMeetingCode?: boolean }>; divisionId?: string }
         >({
             query: ({ meetingId, patch }) => ({
                 url: `/meetings/${meetingId}`,
@@ -88,6 +92,7 @@ export const meetingsApi = api.injectEndpoints({
                 title: raw.title,
                 startsAtUtc: raw.startsAtUtc ?? raw.StartsAtUtc,
                 status: normalizeStatus(raw.status ?? raw.Status),
+                meetingCode: raw.meetingCode ?? raw.MeetingCode ?? undefined,
                 agenda: (raw.agenda ?? raw.Agenda ?? []).map((a: any) => ({
                     id: a.id,
                     title: a.title,
@@ -115,6 +120,7 @@ export const meetingsApi = api.injectEndpoints({
                         if (data.agenda) {
                             draft.agenda = data.agenda;
                         }
+                        if (data.meetingCode) draft.meetingCode = data.meetingCode;
                     }));
                 } catch { /* ignore */ }
             }
@@ -254,6 +260,24 @@ export const meetingsApi = api.injectEndpoints({
             ],
         }),
 
+        // Clear all tickets for a meeting
+        clearTickets: b.mutation<void, string>({
+            query: (meetingId) => ({ url: `/meetings/${meetingId}/codes`, method: "DELETE" }),
+            invalidatesTags: (_r, _e, meetingId) => [
+                { type: "Ticket", id: `LIST-${meetingId}` },
+                { type: "MeetingAccess", id: meetingId },
+            ],
+        }),
+
+        // Replace tickets (clear existing and generate `count` new ones)
+        replaceTickets: b.mutation<TicketDto[], { meetingId: string; count: number }>({
+            query: ({ meetingId, count }) => ({ url: `/meetings/${meetingId}/codes/replace?count=${count}`, method: "POST" }),
+            invalidatesTags: (_r, _e, { meetingId }) => [
+                { type: "Ticket", id: `LIST-${meetingId}` },
+                { type: "MeetingAccess", id: meetingId },
+            ],
+        }),
+
     }),
 });
 
@@ -281,6 +305,7 @@ function toPascalPatch(patch: Record<string, any>): Record<string, any> {
     if (k === "startsAtUtc") { out["StartsAtUtc"] = v; continue; }
     if (k === "title") { out["Title"] = v; continue; }
     if (k === "status") { out["Status"] = v; continue; }
+    if (k === "regenerateMeetingCode" || k === "RegenerateMeetingCode") { out["RegenerateMeetingCode"] = v; continue; }
     // fallback: capitalize first letter
     out[k.charAt(0).toUpperCase() + k.slice(1)] = v;
   }
@@ -315,4 +340,6 @@ export const {
 
     useGetTicketsQuery,
     useGenerateTicketsMutation,
+    useClearTicketsMutation,
+    useReplaceTicketsMutation,
 } = meetingsApi;
