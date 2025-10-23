@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS meetings (
                                         divisionid TEXT NOT NULL,
                                         title TEXT NOT NULL,
                                         startsatutc TIMESTAMPTZ NOT NULL,
+                                        meetingcode TEXT NOT NULL UNIQUE,
                                         CONSTRAINT fk_meetings_division
                                         FOREIGN KEY (divisionid) REFERENCES division(id) ON DELETE CASCADE
     );
@@ -117,4 +118,3 @@ CREATE INDEX IF NOT EXISTS ix_tickets_meeting ON admissiontickets(meetingid);
 CREATE INDEX IF NOT EXISTS ix_ballots_ticket ON ballots(admissionticketid);
 CREATE INDEX IF NOT EXISTS ix_ballots_prop ON ballots(propositionid);
 CREATE INDEX IF NOT EXISTS ix_ballots_option ON ballots(voteoptionid);
-

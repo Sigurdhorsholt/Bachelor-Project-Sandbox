@@ -14,6 +14,7 @@ public class Meeting
     public string Title { get; set; } = "";
     public DateTime StartsAtUtc { get; set; }
     public MeetingStatus Status { get; set; } = MeetingStatus.Draft;
+    public string MeetingCode { get; set; } = "";
 
 
     public Division Division { get; set; } = null!;
