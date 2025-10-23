@@ -65,7 +65,10 @@ public class AgendaController : ControllerBase
         if (meeting == null) return NotFound("Meeting not found.");
         if (meeting.Status == MeetingStatus.Finished) return Conflict("Finished meetings cannot be edited.");
 
-        var item = await _db.AgendaItems.FirstOrDefaultAsync(a => a.Id == itemId && a.MeetingId == meetingId);
+        var item = await _db.AgendaItems
+            .Where(a => a.Id == itemId && a.MeetingId == meetingId)
+            .AsTracking()
+            .FirstOrDefaultAsync();
         if (item == null) return NotFound();
 
         if (req.Title is not null)
@@ -89,7 +92,10 @@ public class AgendaController : ControllerBase
         if (meeting == null) return NotFound("Meeting not found.");
         if (meeting.Status == MeetingStatus.Finished) return Conflict("Finished meetings cannot be edited.");
 
-        var item = await _db.AgendaItems.FirstOrDefaultAsync(a => a.Id == itemId && a.MeetingId == meetingId);
+        var item = await _db.AgendaItems
+            .Where(a => a.Id == itemId && a.MeetingId == meetingId)
+            .AsTracking()
+            .FirstOrDefaultAsync();
         if (item == null) return NotFound();
 
         _db.AgendaItems.Remove(item); // cascade handles children if configured
@@ -97,4 +103,3 @@ public class AgendaController : ControllerBase
         return NoContent();
     }
 }
-    

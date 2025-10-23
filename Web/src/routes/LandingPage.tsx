@@ -121,10 +121,10 @@ export default function LandingPage() {
                         variant="h3"
                         className="!text-2xl sm:!text-4xl !font-extrabold !tracking-tight"
                     >
-                        Join Your Meeting Instantly
+                        Deltag i mødet med det samme
                     </Typography>
                     <Typography variant="body1" className="!text-base sm:!text-lg !text-slate-600">
-                        Enter your Meeting ID to access live voting. No app. No fuss.
+                        Indtast din møde-ID for at få adgang til liveafstemning. Ingen app. Ingen besvær.
                     </Typography>
                 </Box>
 
@@ -133,8 +133,8 @@ export default function LandingPage() {
                     <form onSubmit={handleSubmitMeeting} className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                         <TextField
                             id="meeting-id"
-                            label="Meeting ID"
-                            placeholder="e.g. 9X2-4AB-730"
+                            label="Møde-ID"
+                            placeholder="fx. 9X2-4AB-730"
                             variant="outlined"
                             fullWidth
                             autoComplete="off"
@@ -146,7 +146,7 @@ export default function LandingPage() {
                                         <MeetingRoomIcon/>
                                     </InputAdornment>
                                 ),
-                                inputProps: {"aria-label": "Meeting ID"},
+                                inputProps: {"aria-label": "Møde-ID"},
                             }}
                         />
                         <Button
@@ -156,13 +156,13 @@ export default function LandingPage() {
                             className="sm:!w-40 !rounded-xl"
                             disableElevation
                         >
-                            Enter
+                            Gå ind
                         </Button>
                     </form>
                     <div className="mt-3 text-center text-xs sm:text-sm text-slate-500">
-                        By continuing you agree to our {" "}
-                        <MUILink href="#" underline="hover">Terms</MUILink> and {" "}
-                        <MUILink href="#" underline="hover">Privacy</MUILink>.
+                        Ved at fortsætte accepterer du vores {" "}
+                        <MUILink href="#" underline="hover">Vilkår</MUILink> og {" "}
+                        <MUILink href="#" underline="hover">Privatliv</MUILink>.
                     </div>
                 </Paper>
 
@@ -170,16 +170,16 @@ export default function LandingPage() {
                 <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                     {[
                         {
-                            title: "Secure & Anonymous",
-                            text: "End-to-end encrypted ballots to keep votes private.",
+                            title: "Sikker & anonym",
+                            text: "End-to-end krypterede stemmesedler for at holde stemmer private.",
                         },
                         {
-                            title: "Fast Results",
-                            text: "Live tallies with audit-ready exports for minutes.",
+                            title: "Hurtige resultater",
+                            text: "Live optællinger med revisionsvenlige eksporter til referater.",
                         },
                         {
-                            title: "No App Needed",
-                            text: "Works on any device with a browser.",
+                            title: "Ingen app nødvendig",
+                            text: "Fungerer på enhver enhed med en browser.",
                         },
                     ].map((f, i) => (
                         <Paper key={i} elevation={0} className="p-4 sm:p-5 rounded-2xl border border-slate-100">
@@ -198,29 +198,29 @@ export default function LandingPage() {
             <footer className="border-t border-slate-200">
                 <Container maxWidth="lg" className="py-5 flex flex-col sm:flex-row items-center gap-3 sm:gap-6">
                     <Typography variant="caption" className="!text-slate-500">
-                        © {new Date().getFullYear()} Live Voting. All rights reserved.
+                        © {new Date().getFullYear()} Live Voting. Alle rettigheder forbeholdes.
                     </Typography>
                     <div className="sm:ml-auto flex items-center gap-4 text-xs">
-                        <MUILink href="#" underline="hover">Accessibility</MUILink>
-                        <MUILink href="#" underline="hover">Contact</MUILink>
+                        <MUILink href="#" underline="hover">Tilgængelighed</MUILink>
+                        <MUILink href="#" underline="hover">Kontakt</MUILink>
                     </div>
                 </Container>
             </footer>
 
             {/* Admin Login Modal */}
             <Dialog open={loginOpen} onClose={handleLogin} aria-labelledby="admin-login-title" fullWidth maxWidth="xs">
-                <DialogTitle id="admin-login-title">Admin Login</DialogTitle>
+                <DialogTitle id="admin-login-title">Admin login</DialogTitle>
                 <DialogContent>
                     <Box component="form" className="mt-2 space-y-3" onSubmit={(e) => e.preventDefault()}>
                         <TextField
-                            label="Username"
+                            label="Brugernavn"
                             value={adminUser}
                             onChange={(e) => setAdminUser(e.target.value)}
                             fullWidth
                             autoComplete="username"
                         />
                         <TextField
-                            label="Password"
+                            label="Adgangskode"
                             type="password"
                             value={adminPass}
                             onChange={(e) => setAdminPass(e.target.value)}
@@ -230,9 +230,9 @@ export default function LandingPage() {
                     </Box>
                 </DialogContent>
                 <DialogActions className="px-6 pb-4">
-                    <Button onClick={handleCloseLogin} variant="text">Cancel</Button>
+                    <Button onClick={handleCloseLogin} variant="text">Annuller</Button>
                     <Button onClick={handleLogin} variant="contained" disableElevation>
-                        Login
+                        Log ind
                     </Button>
                 </DialogActions>
             </Dialog>

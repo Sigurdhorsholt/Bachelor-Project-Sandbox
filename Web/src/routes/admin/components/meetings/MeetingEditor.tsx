@@ -11,12 +11,14 @@ import {
     Button,
     Divider,
     IconButton,
-    Tooltip
+    Tooltip,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogActions,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import AddIcon from "@mui/icons-material/Add";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
 
 import AccessManager, {type AccessMode, type VerificationCode} from "./AccessManager";
 import {
@@ -24,10 +26,8 @@ import {
     usePatchMeetingMutation,
     useCreateAgendaItemMutation,
     useUpdateAgendaItemMutation,
-    useDeleteAgendaItemMutation,
-    useCreatePropositionMutation
 } from "../../../../Redux/meetingsApi"; // fixed relative path
-import type {MeetingFullDto} from "../../../../domain/meetings";
+import AgendaItemCard from "./components/AgendaItemCard.tsx";
 
 // Local temporary AccessManager state (will be replaced later)
 type TempCode = VerificationCode;
@@ -77,8 +77,6 @@ export default function MeetingEditor() {
     const [patchMeeting] = usePatchMeetingMutation();
     const [createAgendaItem] = useCreateAgendaItemMutation();
     const [updateAgendaItem] = useUpdateAgendaItemMutation();
-    const [deleteAgendaItem] = useDeleteAgendaItemMutation();
-    const [createProposition] = useCreatePropositionMutation();
 
     // Error handling utility
     function asErrorText(err: any): string {
@@ -129,48 +127,57 @@ export default function MeetingEditor() {
         setErrorMsg(null);
     }
 
+    // Locked flag used by UI to prevent edits when meeting status is Finished
     const isLocked = meeting?.status === "Finished";
 
     // Agenda operations
-    async function addAgenda() {
+    // Dialog state used for both creating and renaming agenda items
+    const [agendaDialogOpen, setAgendaDialogOpen] = React.useState(false);
+    const [agendaDialogMode, setAgendaDialogMode] = React.useState<"add" | "rename">("add");
+    const [agendaDialogValue, setAgendaDialogValue] = React.useState("");
+    const [agendaDialogTargetId, setAgendaDialogTargetId] = React.useState<string | null>(null);
+    const [agendaDialogSubmitting, setAgendaDialogSubmitting] = React.useState(false);
+
+    function openAddAgendaDialog() {
         if (!meeting || isLocked) return;
-        await createAgendaItem({
-            meetingId: meeting.id,
-            title: `New item ${(meeting.agenda.length) + 1}`
-        }).unwrap().catch(() => {
-        });
-        refetch();
+        setAgendaDialogMode("add");
+        setAgendaDialogValue("");
+        setAgendaDialogTargetId(null);
+        setAgendaDialogOpen(true);
     }
 
-    async function renameAgenda(itemId: string) {
+    async function openRenameAgendaDialog(itemId: string, currentTitle: string) {
         if (!meeting || isLocked) return;
-        const title = prompt("New title?")?.trim();
-        if (!title) return;
-        await updateAgendaItem({meetingId: meeting.id, itemId, title}).unwrap().catch(() => {
-        });
-        refetch();
+        setAgendaDialogMode("rename");
+        setAgendaDialogValue(currentTitle ?? "");
+        setAgendaDialogTargetId(itemId);
+        setAgendaDialogOpen(true);
     }
 
-    async function removeAgenda(itemId: string) {
-        if (!meeting || isLocked) return;
-        if (!confirm("Remove agenda item?")) return;
-        await deleteAgendaItem({meetingId: meeting.id, itemId}).unwrap().catch(() => {
-        });
-        refetch();
+    async function handleAgendaDialogConfirm() {
+        if (!meeting) return;
+        const title = agendaDialogValue?.trim();
+        if (!title) return; // don't allow empty
+        setAgendaDialogSubmitting(true);
+        try {
+            if (agendaDialogMode === "add") {
+                await createAgendaItem({ meetingId: meeting.id, title }).unwrap();
+            } else if (agendaDialogMode === "rename" && agendaDialogTargetId) {
+                await updateAgendaItem({ meetingId: meeting.id, itemId: agendaDialogTargetId, title }).unwrap();
+            }
+            await refetch();
+            setAgendaDialogOpen(false);
+        } catch (e) {
+            // ignore errors here; the top-level error handling will show messages elsewhere
+            console.error(e);
+        } finally {
+            setAgendaDialogSubmitting(false);
+        }
     }
 
-    async function addProposition(itemId: string) {
-        if (!meeting || isLocked) return;
-        const question = prompt("Proposition question?")?.trim();
-        if (!question) return;
-        await createProposition({
-            meetingId: meeting.id,
-            itemId,
-            question,
-            voteType: "YesNoBlank"
-        }).unwrap().catch(() => {
-        });
-        refetch();
+    function handleAgendaDialogClose() {
+        if (agendaDialogSubmitting) return;
+        setAgendaDialogOpen(false);
     }
 
     // AccessManager placeholder handlers
@@ -239,17 +246,17 @@ export default function MeetingEditor() {
         <Box className="min-h-screen flex flex-col">
             <Container maxWidth="lg" className="py-4 md:py-6">
                 <div className="flex items-center gap-2 mb-3">
-                    <IconButton onClick={() => navigate(-1)} aria-label="Back"><ArrowBackIcon/></IconButton>
-                    <Typography variant="h5" className="!font-bold">Edit Meeting</Typography>
+                    <IconButton onClick={() => navigate(-1)} aria-label="Tilbage"><ArrowBackIcon/></IconButton>
+                    <Typography variant="h5" className="!font-bold">Rediger møde</Typography>
                     <span className="ml-auto text-sm text-slate-500">ID: {meeting.id}</span>
                 </div>
 
                 {/* Details */}
                 <Paper className="p-4 md:p-5 rounded-2xl border border-slate-100 mb-4" elevation={0}>
-                    <Typography variant="subtitle1" className="!font-semibold mb-3">Details</Typography>
+                    <Typography variant="subtitle1" className="!font-semibold mb-3">Detaljer</Typography>
                     <div className="grid md:grid-cols-3 gap-3">
                         <TextField
-                            label="Title"
+                            label="Titel"
                             size="small"
                             variant="outlined"
                             value={draft.title}
@@ -257,7 +264,7 @@ export default function MeetingEditor() {
                             disabled={isLocked || saving}
                         />
                         <TextField
-                            label="Start time"
+                            label="Starttid"
                             type="datetime-local"
                             size="small"
                             variant="outlined"
@@ -275,10 +282,10 @@ export default function MeetingEditor() {
                             onChange={(e) => setDraft(d => ({...d, status: e.target.value}))}
                             disabled={saving}
                         >
-                            <MenuItem value="Draft">Draft</MenuItem>
-                            <MenuItem value="Scheduled">Scheduled</MenuItem>
-                            <MenuItem value="Published">Published</MenuItem>
-                            <MenuItem value="Finished">Finished</MenuItem>
+                            <MenuItem value="Draft">Udkast</MenuItem>
+                            <MenuItem value="Scheduled">Planlagt</MenuItem>
+                            <MenuItem value="Published">Offentliggjort</MenuItem>
+                            <MenuItem value="Finished">Afsluttet</MenuItem>
                         </TextField>
                     </div>
                     <div className="mt-3 flex gap-2">
@@ -288,21 +295,21 @@ export default function MeetingEditor() {
                             disableElevation
                             onClick={handleSave}
                             disabled={!isDirty || saving || isLocked}
-                        >{saving ? "Saving…" : "Save changes"}</Button>
+                        >{saving ? "Gemmer…" : "Gem ændringer"}</Button>
                         <Button
                             variant="outlined"
                             size="small"
                             onClick={handleReset}
                             disabled={!isDirty || saving}
-                        >Reset</Button>
+                        >Nulstil</Button>
                         {isDirty && !isLocked && (
-                            <span className="text-xs text-amber-600 flex items-center">Unsaved changes</span>
+                            <span className="text-xs text-amber-600 flex items-center">Usave'de ændringer</span>
                         )}
                     </div>
                     {errorMsg && <Typography variant="body2" className="!text-red-600 mt-2">{errorMsg}</Typography>}
                     {isLocked &&
-                        <Typography variant="body2" className="!text-red-600 mt-2">This meeting is finished and cannot
-                            be edited.</Typography>}
+                        <Typography variant="body2" className="!text-red-600 mt-2">Dette møde er afsluttet og kan ikke
+                            redigeres.</Typography>}
                 </Paper>
 
                 {/* AccessManager (still local) */}
@@ -321,43 +328,68 @@ export default function MeetingEditor() {
                 {/* Agenda */}
                 <Paper className="p-4 md:p-5 rounded-2xl border border-slate-100" elevation={0}>
                     <div className="flex items-center justify-between">
-                        <Typography variant="subtitle1" className="!font-semibold">Agenda</Typography>
-                        <Tooltip title={isLocked ? "Meeting is finished" : "Add agenda item"}>
-              <span>
-                <Button startIcon={<AddIcon/>} variant="outlined" size="small" className="!rounded-lg"
-                        onClick={addAgenda} disabled={isLocked}>Add item</Button>
-              </span>
+                        <Typography variant="subtitle1" className="!font-semibold">Dagsorden</Typography>
+                        <Tooltip title={isLocked ? "Mødet er afsluttet" : "Tilføj dagsordenspunkt"}>
+                      <span>
+                        <Button
+                            startIcon={<AddIcon/>}
+                            variant="outlined"
+                            size="small"
+                            className="!rounded-lg"
+                            onClick={openAddAgendaDialog}
+                            disabled={isLocked}
+                        >
+                          Tilføj punkt
+                        </Button>
+                      </span>
                         </Tooltip>
                     </div>
+
                     <Divider className="my-3"/>
+
                     <div className="space-y-2">
-                        {meeting.agenda.map((a: MeetingFullDto['agenda'][number], i) => (
-                            <Paper key={a.id} className="p-3 rounded-xl border border-slate-200" elevation={0}>
-                                <div className="flex items-center gap-2">
-                                    <Typography className="!font-medium">{i + 1}. {a.title}</Typography>
-                                    <div className="ml-auto flex items-center gap-1">
-                                        <Tooltip title="Edit title"><span><IconButton size="small"
-                                                                                      onClick={() => renameAgenda(a.id)}
-                                                                                      disabled={isLocked}><EditIcon
-                                            fontSize="small"/></IconButton></span></Tooltip>
-                                        <Tooltip title="Remove"><span><IconButton size="small"
-                                                                                  onClick={() => removeAgenda(a.id)}
-                                                                                  disabled={isLocked}><DeleteIcon
-                                            fontSize="small"/></IconButton></span></Tooltip>
-                                    </div>
-                                </div>
-                                <div className="mt-2 text-sm text-slate-600">Propositions: {a.propositions.length}</div>
-                                <div className="mt-2">
-                                    <Button size="small" variant="text" startIcon={<AddIcon/>}
-                                            onClick={() => addProposition(a.id)} disabled={isLocked}>Add
-                                        proposition</Button>
-                                </div>
-                            </Paper>
+                        {meeting.agenda.map((a, i) => (
+                            <AgendaItemCard
+                                key={a.id}
+                                meetingId={meeting.id}
+                                itemId={a.id}
+                                index={i}
+                                title={a.title}
+                                description={a.description}
+                                locked={isLocked}
+                                onRequestRename={openRenameAgendaDialog}
+                            />
                         ))}
-                        {meeting.agenda.length === 0 &&
-                            <Typography variant="body2" className="!text-slate-500">No agenda items yet.</Typography>}
+                        {meeting.agenda.length === 0 && (
+                            <Typography variant="body2" className="!text-slate-500">
+                                Ingen dagsordenspunkter endnu.
+                            </Typography>
+                        )}
                     </div>
                 </Paper>
+
+                {/* Agenda add / rename dialog */}
+                <Dialog open={agendaDialogOpen} onClose={handleAgendaDialogClose} fullWidth maxWidth="sm">
+                    <DialogTitle>{agendaDialogMode === "add" ? "Tilføj dagsordenspunkt" : "Ændr titel"}</DialogTitle>
+                    <DialogContent>
+                        <TextField
+                            autoFocus
+                            margin="dense"
+                            label={agendaDialogMode === "add" ? "Punkt titel" : "Ny titel"}
+                            fullWidth
+                            value={agendaDialogValue}
+                            onChange={(e) => setAgendaDialogValue(e.target.value)}
+                        />
+                    </DialogContent>
+                    <DialogActions>
+                        <Button onClick={handleAgendaDialogClose} disabled={agendaDialogSubmitting}>Annuller</Button>
+                        <Button onClick={handleAgendaDialogConfirm} disabled={agendaDialogSubmitting || !(agendaDialogValue?.trim())} variant="contained">
+                            {agendaDialogSubmitting ? (agendaDialogMode === "add" ? "Opretter…" : "Opdaterer…") : (agendaDialogMode === "add" ? "Opret" : "Gem")}
+                        </Button>
+                    </DialogActions>
+                </Dialog>
+
+
             </Container>
         </Box>
     );

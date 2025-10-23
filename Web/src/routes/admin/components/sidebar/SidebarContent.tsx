@@ -87,14 +87,14 @@ export default function SidebarContent({
                                        sx={{ bgcolor: "transparent", pl: 0, display: "flex", alignItems: "center", gap: 1, mt: 1, pr: 0 }}
                         >
                             <DomainTreeIcon fontSize="small" />
-                            <span style={{ flex: 1 }}>Divisions</span>
-                            <Tooltip title={onCreateDivision ? "Add division" : "Disabled"}>
+                            <span style={{ flex: 1 }}>Afdelinger</span>
+                            <Tooltip title={onCreateDivision ? "Tilføj afdeling" : "Deaktiveret"}>
                 <span>
                   <IconButton
                       size="small"
                       onClick={handleAddClick}
                       disabled={!onCreateDivision}
-                      aria-label="Add division"
+                      aria-label="Tilføj afdeling"
                   >
                     <AddIcon fontSize="small" />
                   </IconButton>
@@ -125,7 +125,7 @@ export default function SidebarContent({
                     <ListSubheader component="div"
                                    sx={{ bgcolor: "transparent", pl: 0, display: "flex", alignItems: "center", gap: 1 }}
                     >
-                        <EventIcon fontSize="small" /> Meetings in division
+                        <EventIcon fontSize="small" /> Møder i Afdeling
                     </ListSubheader>
                 }
                 sx={{ px: 0 }}
@@ -142,32 +142,32 @@ export default function SidebarContent({
                 ))}
                 {meetings.length === 0 && (
                     <Typography variant="body2" color="text.secondary" sx={{ px: 2, py: 1 }}>
-                        No meetings.
+                        Ingen møder.
                     </Typography>
                 )}
             </List>
 
             {/* Add Division Dialog */}
             <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs">
-                <DialogTitle>Add division</DialogTitle>
+                <DialogTitle>Tilføj afdeling</DialogTitle>
                 <DialogContent>
                     <TextField
                         autoFocus
                         margin="dense"
-                        label="Division name"
+                        label="Afdelingsnavn"
                         fullWidth
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
                     />
                 </DialogContent>
                 <DialogActions>
-                    <Button onClick={handleClose} disabled={submitting}>Cancel</Button>
+                    <Button onClick={handleClose} disabled={submitting}>Annuller</Button>
                     <Button
                         onClick={handleCreate}
                         disabled={!canSubmit || submitting || !onCreateDivision}
                         variant="contained"
                     >
-                        {submitting ? "Adding…" : "Add"}
+                        {submitting ? "Tilføjer…" : "Tilføj"}
                     </Button>
                 </DialogActions>
             </Dialog>

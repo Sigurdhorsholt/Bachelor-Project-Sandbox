@@ -1,4 +1,3 @@
-// routes/admin/components/TopBar.tsx
 import { AppBar, Toolbar, Typography, Button } from "@mui/material";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import LogoutIcon from "@mui/icons-material/Logout";

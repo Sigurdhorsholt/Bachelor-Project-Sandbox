@@ -61,8 +61,10 @@ export default function MeetingsTable({
             {/* Header */}
             <Box className="p-3 md:p-4 border-b border-slate-100 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                    <Typography variant="subtitle1" className="!font-semibold">Meetings</Typography>
-                    <Tooltip title={onCreateMeeting ? "Add meeting" : "Disabled"}>
+                    <Typography variant="subtitle1" className="!font-semibold">
+                        Møder
+                    </Typography>
+                    <Tooltip title={onCreateMeeting ? "Tilføj møde" : "Deaktiveret"}>
             <span>
               <IconButton size="small" onClick={handleOpen} disabled={!onCreateMeeting}>
                 <AddIcon fontSize="small" />
@@ -71,8 +73,12 @@ export default function MeetingsTable({
                     </Tooltip>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button size="small" variant="outlined" className="!rounded-lg" disabled>Export CSV</Button>
-                    <Button size="small" variant="outlined" className="!rounded-lg" disabled>Filter</Button>
+                    <Button size="small" variant="outlined" className="!rounded-lg" disabled>
+                        Eksporter CSV
+                    </Button>
+                    <Button size="small" variant="outlined" className="!rounded-lg" disabled>
+                        Filter
+                    </Button>
                 </div>
             </Box>
 
@@ -81,10 +87,10 @@ export default function MeetingsTable({
                 <Table size="small" aria-label="Meetings list" className="min-w-[720px]">
                     <TableHead>
                         <TableRow className="bg-slate-50">
-                            <TableCell>Title</TableCell>
+                            <TableCell>Titel</TableCell>
                             <TableCell className="hidden sm:table-cell">Start</TableCell>
                             <TableCell>Status</TableCell>
-                            <TableCell align="right">Actions</TableCell>
+                            <TableCell align="right">Handlinger</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -106,8 +112,8 @@ export default function MeetingsTable({
                                 <TableCell><Chip size="small" label={m.status} variant="outlined" /></TableCell>
                                 <TableCell align="right">
                                     <div className="flex justify-end gap-2">
-                                        <Button size="small" variant="text" className="!rounded-lg" disabled>Edit</Button>
-                                        <Button size="small" variant="text" className="!rounded-lg" disabled>Open</Button>
+                                        <Button size="small" variant="text" className="!rounded-lg" disabled>Rediger</Button>
+                                        <Button size="small" variant="text" className="!rounded-lg" disabled>Åbn</Button>
                                     </div>
                                 </TableCell>
                             </TableRow>
@@ -116,7 +122,7 @@ export default function MeetingsTable({
                             <TableRow>
                                 <TableCell colSpan={4}>
                                     <Typography variant="body2" className="!text-slate-500 py-4 text-center">
-                                        No meetings in this division.
+                                        Ingen møder i denne division.
                                     </Typography>
                                 </TableCell>
                             </TableRow>
@@ -127,12 +133,12 @@ export default function MeetingsTable({
 
             {/* Add Meeting Dialog */}
             <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs">
-                <DialogTitle>Add meeting</DialogTitle>
+                <DialogTitle>Tilføj møde</DialogTitle>
                 <DialogContent>
                     <Box sx={{ mt: 1 }}>
                         <Box sx={{ display: "grid", gap: 2 }}>
                             <TextField
-                                label="Title"
+                                label="Titel"
                                 fullWidth
                                 size="small"
                                 variant="outlined"
@@ -142,7 +148,7 @@ export default function MeetingsTable({
                             />
 
                             <TextField
-                                label="Start time"
+                                label="Starttid"
                                 type="datetime-local"
                                 fullWidth
                                 size="small"
@@ -151,7 +157,7 @@ export default function MeetingsTable({
                                 InputLabelProps={{ shrink: true }}
                                 value={form.startsAt}
                                 onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
-                                inputProps={{ placeholder: "YYYY-MM-DDTHH:mm" }}
+                                inputProps={{ placeholder: "ÅÅÅÅ-MM-DDTHH:mm" }}
                             />
 
                             <TextField
@@ -164,24 +170,26 @@ export default function MeetingsTable({
                                 value={form.status}
                                 onChange={(e) => setForm({ ...form, status: e.target.value as MeetingStatus })}
                             >
-                                <MenuItem value="Draft">Draft</MenuItem>
-                                <MenuItem value="Scheduled">Scheduled</MenuItem>
-                                <MenuItem value="Published">Published</MenuItem>
-                                <MenuItem value="Finished">Finished</MenuItem>
+                                <MenuItem value="Draft">Udkast</MenuItem>
+                                <MenuItem value="Scheduled">Planlagt</MenuItem>
+                                <MenuItem value="Published">Offentliggjort</MenuItem>
+                                <MenuItem value="Finished">Afsluttet</MenuItem>
                             </TextField>
                         </Box>
                     </Box>
                 </DialogContent>
 
                 <DialogActions>
-                    <Button onClick={handleClose} disabled={submitting}>Cancel</Button>
+                    <Button onClick={handleClose} disabled={submitting}>
+                        Annuller
+                    </Button>
                     <Button
                         onClick={handleCreate}
                         variant="contained"
                         disableElevation
                         disabled={!canSubmit || submitting || !onCreateMeeting}
                     >
-                        {submitting ? "Creating…" : "Create"}
+                        {submitting ? "Opretter…" : "Opret"}
                     </Button>
                 </DialogActions>
             </Dialog>

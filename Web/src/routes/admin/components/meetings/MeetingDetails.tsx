@@ -18,18 +18,29 @@ export default function MeetingDetails({
 
     return (
         <Paper elevation={0} className="p-4 md:p-5 rounded-2xl border border-slate-100">
-            <Typography variant="h6" className="!font-semibold">{meeting.title}</Typography>
-            <div className="mt-1 text-sm text-slate-600">Organisation: {orgName} • Division: {divisionName}</div>
-            <div className="mt-1 text-sm text-slate-600">Starts: {fmt(meeting.startsAt)}</div>
+            <Typography variant="h6" className="!font-semibold">
+                {meeting.title}
+            </Typography>
+            <div className="mt-1 text-sm text-slate-600">
+                Organisation: {orgName} • Afdeling: {divisionName}
+            </div>
+            <div className="mt-1 text-sm text-slate-600">
+                Starter: {fmt(meeting.startsAt)}
+            </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
+                Status:
                 <Chip size="small" label={meeting.status} />
             </div>
             <Box className="mt-4 flex flex-wrap gap-2">
                 <Button variant="contained" disableElevation className="!rounded-lg" onClick={goEdit}>
-                    Open Meeting
+                    Åben Møde
                 </Button>
-                <Button variant="outlined" className="!rounded-lg" disabled>Results</Button>
-                <Button variant="outlined" className="!rounded-lg" disabled>Begin Meeting</Button>
+                <Button variant="outlined" className="!rounded-lg" disabled>
+                    Resultater
+                </Button>
+                <Button variant="outlined" className="!rounded-lg" disabled>
+                    Start møde
+                </Button>
             </Box>
         </Paper>
     );

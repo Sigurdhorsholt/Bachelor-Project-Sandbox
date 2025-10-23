@@ -72,7 +72,10 @@ public class PropositionsController : ControllerBase
         if (meeting == null) return NotFound("Meeting not found.");
         if (meeting.Status == MeetingStatus.Finished) return Conflict("Finished meetings cannot be edited.");
 
-        var p = await _db.Propositions.FirstOrDefaultAsync(x => x.Id == propId && x.AgendaItemId == itemId);
+        var p = await _db.Propositions
+            .Where(x => x.Id == propId && x.AgendaItemId == itemId)
+            .AsTracking()
+            .FirstOrDefaultAsync();
         if (p == null) return NotFound();
 
         if (req.Question is not null)
@@ -100,7 +103,10 @@ public class PropositionsController : ControllerBase
         if (meeting == null) return NotFound("Meeting not found.");
         if (meeting.Status == MeetingStatus.Finished) return Conflict("Finished meetings cannot be edited.");
 
-        var p = await _db.Propositions.FirstOrDefaultAsync(x => x.Id == propId && x.AgendaItemId == itemId);
+        var p = await _db.Propositions
+            .Where(x => x.Id == propId && x.AgendaItemId == itemId)
+            .AsTracking()
+            .FirstOrDefaultAsync();
         if (p == null) return NotFound();
 
         _db.Propositions.Remove(p);

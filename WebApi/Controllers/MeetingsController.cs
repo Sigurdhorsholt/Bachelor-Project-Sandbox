@@ -61,6 +61,7 @@ public class MeetingsController : ControllerBase
     {
         var meeting = await _db.Meetings
             .Include(x => x.AgendaItems).ThenInclude(a => a.Propositions)
+            .AsTracking()
             .FirstOrDefaultAsync(x => x.Id == id);
         if (meeting == null) return NotFound();
 
