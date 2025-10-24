@@ -3,6 +3,7 @@ import LandingPage from "./routes/LandingPage.tsx";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminDashboard from "./routes/admin/AdminDashboard.tsx";
 import MeetingEditor from "./routes/admin/components/meetings/MeetingEditor.tsx";
+import MeetingLiveAdmin from "./routes/admin/components/meetings/MeetingLiveAdmin.tsx";
 
 function MeetingPlaceholder() {
     return <div className="p-6">TODO: Public meeting join page</div>;
@@ -16,6 +17,7 @@ const router = createBrowserRouter([
         children: [
             {path: "/admin", element: <AdminDashboard/>},
             {path: "/admin/meetings/:id", element: <MeetingEditor/>},
+            {path: "/admin/meetings/:id/live", element: <MeetingLiveAdmin/>},
         ],
 
     },
