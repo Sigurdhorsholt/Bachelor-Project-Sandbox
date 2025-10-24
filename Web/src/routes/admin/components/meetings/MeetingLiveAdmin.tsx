@@ -210,17 +210,16 @@ export default function MeetingLiveAdmin() {
                                                             );
                                                         }}
                                                         sx={{
-                                                            // Apply theme selected background when MUI marks the component selected
+                                                            // More prominent selected style: primary.light bg, left accent and shadow
                                                             '&.Mui-selected': {
-                                                                bgcolor: (t) => t.palette.action.selected,
-                                                                // left accent to make selection obvious in all themes
+                                                                bgcolor: (t) => t.palette.primary.light,
                                                                 borderLeft: (t) => `4px solid ${t.palette.primary.main}`,
                                                                 pl: 1.5,
-                                                                // ensure text remains readable if action.selected is dark
-                                                                color: (t) => t.palette.action.selectedContrast || t.palette.text.primary,
+                                                                color: (t) => t.palette.primary.contrastText,
+                                                                boxShadow: 3,
                                                             },
                                                             '&.Mui-selected:hover': {
-                                                                bgcolor: (t) => t.palette.action.selected,
+                                                                bgcolor: (t) => t.palette.primary.light,
                                                             },
                                                         }}
                                                     >
@@ -260,13 +259,14 @@ export default function MeetingLiveAdmin() {
                                                         onClick={() => setSelectedPropIndex(pIdx)}
                                                         sx={{
                                                             '&.Mui-selected': {
-                                                                bgcolor: (t) => t.palette.action.selected,
+                                                                bgcolor: (t) => t.palette.primary.light,
                                                                 borderLeft: (t) => `4px solid ${t.palette.primary.main}`,
                                                                 pl: 1.5,
-                                                                color: (t) => t.palette.action.selectedContrast || t.palette.text.primary,
+                                                                color: (t) => t.palette.primary.contrastText,
+                                                                boxShadow: 3,
                                                             },
                                                             '&.Mui-selected:hover': {
-                                                                bgcolor: (t) => t.palette.action.selected,
+                                                                bgcolor: (t) => t.palette.primary.light,
                                                             },
                                                         }}
                                                     >
@@ -331,29 +331,7 @@ export default function MeetingLiveAdmin() {
                                         Next
                                     </Button>
                                 </Box>
-
-                                {/* Selection hint */}
-                                <Box className="mt-3 text-sm text-slate-600">
-                                    <div>
-                                        Selected agenda:{" "}
-                                        <strong>
-                                            {selectedAgendaIndex >= 0
-                                                ? selectedAgenda?.title ?? "—"
-                                                : "(none)"}
-                                        </strong>
-                                    </div>
-                                    <div>
-                                        Selected proposition:{" "}
-                                        <strong>
-                                            {selectedProposition ? selectedProposition.question : "(none)"}
-                                        </strong>
-                                    </div>
-                                    <div className="mt-1 text-xs text-slate-400">
-                                        Select an agenda item first, then a proposition. Actions are
-                                        disabled until livestream/backend is implemented.
-                                    </div>
-                                </Box>
-
+                                
                                 {/* Re-vote */}
                                 <Box className="mt-4">
                                     <Button
