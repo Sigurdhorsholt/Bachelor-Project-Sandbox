@@ -17,8 +17,10 @@ export default function MeetingDetails({
     const goEdit = () => navigate(`/admin/meetings/${meeting.id}`);
 
     const goStartMeeting = () => {
-        // Navigate to the new admin live view for this meeting
         // TODO: keep any pre-flight checks here (e.g. confirm start / permissions)
+        
+        
+        
         navigate(`/admin/meetings/${meeting.id}/live`);
     };
 

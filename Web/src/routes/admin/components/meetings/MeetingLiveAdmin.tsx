@@ -8,12 +8,10 @@ import {
     CardHeader,
     Chip,
     Divider,
-    Grid,
     List,
     ListItem,
     ListItemButton,
     ListItemText,
-    TextField,
     Typography,
 } from "@mui/material";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
@@ -29,6 +27,7 @@ import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import PowerSettingsNewRoundedIcon from "@mui/icons-material/PowerSettingsNewRounded";
 
 import { useGetMeetingFullQuery } from "../../../../Redux/meetingsApi.ts";
+import ManualBallots from "./meetingLiveAdmin/ManualBallots";
 
 export default function MeetingLiveAdmin() {
     const { id } = useParams() as { id?: string };
@@ -45,12 +44,10 @@ export default function MeetingLiveAdmin() {
     const [attendance, _setAttendance] = useState({ present: 0, registered: 0 });
     const [voteProgress, setVoteProgress] = useState({ cast: 0, total: 0 });
 
-    // Manual ballots input (admin-entered paper ballots) — UI only for now
-    const [manualBallotsCount, setManualBallotsCount] = useState<string>("");
-    const [manualBallotsNotes, setManualBallotsNotes] = useState<string>("");
     // Track applied manual ballots per proposition id in local UI state (demo only)
+    // Store detailed per-option counts, notes and total
     const [manualBallotsMap, setManualBallotsMap] = useState<
-        Record<string, { count: number; notes?: string }>
+        Record<string, { counts: Record<string, number>; notes?: string; total: number }>
     >({});
 
     useEffect(() => {
@@ -80,6 +77,33 @@ export default function MeetingLiveAdmin() {
         // TODO: implement closing a vote (server call /signalR)
     };
 
+    // Apply manual ballots provided as per-option counts
+    const handleApplyManualBallots = (counts: Record<string, number>, notes?: string) => {
+        if (!selectedProposition) return;
+        const pid = selectedProposition.id;
+        const totalCount = Object.values(counts).reduce((s, n) => s + (Number.isFinite(n) ? n : 0), 0);
+        if (totalCount <= 0) return;
+
+        setManualBallotsMap((prev) => {
+            const prevEntry = prev[pid] ?? { counts: {}, notes: "", total: 0 };
+            const mergedCounts: Record<string, number> = { ...prevEntry.counts };
+            for (const k of Object.keys(counts)) {
+                mergedCounts[k] = (mergedCounts[k] ?? 0) + (counts[k] ?? 0);
+            }
+            return {
+                ...prev,
+                [pid]: {
+                    counts: mergedCounts,
+                    notes: notes ?? prevEntry.notes,
+                    total: (prevEntry.total ?? 0) + totalCount,
+                },
+            };
+        });
+
+        // Update demo voteProgress: add cast and total so it's visible in the UI
+        setVoteProgress((prev) => ({ cast: prev.cast + totalCount, total: prev.total + totalCount }));
+    };
+
     // Navigate propositions within current agenda
     const handleNextVote = () => {
         if (!selectedAgenda) return;
@@ -97,31 +121,6 @@ export default function MeetingLiveAdmin() {
 
     const handleStartReVote = () => {
         // TODO: start a re-vote (allow hybrid paper inputs)
-    };
-
-    const handleApplyManualBallots = () => {
-        if (!selectedProposition) return;
-        const pid = selectedProposition.id;
-        const count = Number(manualBallotsCount);
-        if (!Number.isFinite(count) || count <= 0) {
-            // invalid input — ignore for now
-            return;
-        }
-        setManualBallotsMap((prev) => {
-            const prevEntry = prev[pid] ?? { count: 0, notes: "" };
-            return {
-                ...prev,
-                [pid]: {
-                    count: prevEntry.count + count,
-                    notes: manualBallotsNotes || prevEntry.notes,
-                },
-            };
-        });
-        // Update demo voteProgress: add cast and total so it's visible in the UI
-        setVoteProgress((prev) => ({ cast: prev.cast + count, total: prev.total + count }));
-        // clear inputs
-        setManualBallotsCount("");
-        setManualBallotsNotes("");
     };
 
     return (
@@ -172,9 +171,9 @@ export default function MeetingLiveAdmin() {
 
             {/* Content */}
             <Box className="px-4 md:px-6 py-6">
-                <Grid container spacing={3}>
+                <Box className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {/* LEFT: Voting controls */}
-                    <Grid item xs={12} md={4}>
+                    <Box>
                         <Card elevation={1} className="rounded-2xl">
                             <CardHeader
                                 title="Afstemnings håndtering"
@@ -346,69 +345,47 @@ export default function MeetingLiveAdmin() {
                                     </Button>
                                 </Box>
 
-                                {/* Manual ballots */}
-                                <Box className="mt-5">
-                                    <Typography
-                                        variant="overline"
-                                        color="text.secondary"
-                                        className="tracking-wider"
-                                    >
-                                        Manual ballots (paper)
-                                    </Typography>
-                                    <Grid container spacing={1.5}>
-                                        <Grid item xs={12}>
-                                            <TextField
-                                                label="Paper ballots (count)"
-                                                type="number"
-                                                value={manualBallotsCount}
-                                                onChange={(e) => setManualBallotsCount(e.target.value)}
-                                                fullWidth
-                                                size="small"
-                                            />
-                                        </Grid>
-                                        <Grid item xs={12}>
-                                            <TextField
-                                                label="Notes"
-                                                value={manualBallotsNotes}
-                                                onChange={(e) => setManualBallotsNotes(e.target.value)}
-                                                fullWidth
-                                                multiline
-                                                rows={3}
-                                                size="small"
-                                            />
-                                        </Grid>
-                                        <Grid item xs={12}>
-                                            <Button
-                                                variant="contained"
-                                                fullWidth
-                                                disabled={!selectedProposition}
-                                                onClick={handleApplyManualBallots}
-                                            >
-                                                Add manual ballots
-                                            </Button>
-                                        </Grid>
-                                    </Grid>
 
-                                    {selectedProposition &&
-                                        manualBallotsMap[selectedProposition.id] && (
-                                            <Typography
-                                                variant="body2"
-                                                className="mt-2"
-                                                color="text.secondary"
-                                            >
-                                                Applied manual ballots:{" "}
-                                                <strong>
-                                                    {manualBallotsMap[selectedProposition.id].count}
-                                                </strong>
+                                {/** 
+                                <Box className="mt-5">
+                                    <ManualBallots
+                                        proposition={selectedProposition}
+                                        disabled={!selectedProposition}
+                                        onApply={handleApplyManualBallots}
+                                    />
+
+                                    {selectedProposition && manualBallotsMap[selectedProposition.id] && (
+                                        <Box className="mt-2">
+                                            <Typography variant="body2" color="text.secondary">
+                                                Applied manual ballots:
                                             </Typography>
-                                        )}
+                                            <Typography className="mt-1" fontWeight={600}>
+                                                {manualBallotsMap[selectedProposition.id].total}
+                                            </Typography>
+                                            <Box className="mt-1">
+                                                {Object.entries(manualBallotsMap[selectedProposition.id].counts).map(([k, v]) => (
+                                                    <Typography key={k} variant="body2" color="text.secondary">
+                                                        {k}: <strong>{v}</strong>
+                                                    </Typography>
+                                                ))}
+                                                {manualBallotsMap[selectedProposition.id].notes && (
+                                                    <Typography variant="body2" color="text.secondary">
+                                                        Notes: {manualBallotsMap[selectedProposition.id].notes}
+                                                    </Typography>
+                                                )}
+                                            </Box>
+                                        </Box>
+                                    )}
                                 </Box>
+                                */}
+                                
+                                
                             </CardContent>
                         </Card>
-                    </Grid>
+                    </Box>
 
                     {/* MIDDLE: Live monitor */}
-                    <Grid item xs={12} md={4}>
+                    <Box>
                         <Card elevation={1} className="rounded-2xl">
                             <CardHeader
                                 title="Live monitor"
@@ -453,10 +430,10 @@ export default function MeetingLiveAdmin() {
                                 </Box>
                             </CardContent>
                         </Card>
-                    </Grid>
+                    </Box>
 
                     {/* RIGHT: Results & minutes */}
-                    <Grid item xs={12} md={4}>
+                    <Box>
                         <Card elevation={1} className="rounded-2xl">
                             <CardHeader
                                 title="Results & minutes"
@@ -470,8 +447,8 @@ export default function MeetingLiveAdmin() {
                                     {selectedProposition ? selectedProposition.question : "—"}
                                 </Typography>
 
-                                <Grid container spacing={1.5} className="mt-2">
-                                    <Grid item xs={12} sm="auto">
+                                <Box className="flex flex-wrap gap-1.5 mt-2">
+                                    <Box className="w-full sm:w-auto">
                                         <Button
                                             variant="contained"
                                             color="primary"
@@ -481,8 +458,8 @@ export default function MeetingLiveAdmin() {
                                         >
                                             Finalize for minutes
                                         </Button>
-                                    </Grid>
-                                    <Grid item xs={12} sm="auto">
+                                    </Box>
+                                    <Box className="w-full sm:w-auto">
                                         <Button
                                             variant="outlined"
                                             startIcon={<FileDownloadRoundedIcon />}
@@ -490,8 +467,8 @@ export default function MeetingLiveAdmin() {
                                         >
                                             Export CSV
                                         </Button>
-                                    </Grid>
-                                    <Grid item xs={12} sm="auto">
+                                    </Box>
+                                    <Box className="w-full sm:w-auto">
                                         <Button
                                             variant="outlined"
                                             startIcon={<VisibilityRoundedIcon />}
@@ -499,12 +476,12 @@ export default function MeetingLiveAdmin() {
                                         >
                                             Show audience results
                                         </Button>
-                                    </Grid>
-                                </Grid>
+                                    </Box>
+                                </Box>
                             </CardContent>
                         </Card>
-                    </Grid>
-                </Grid>
+                    </Box>
+                </Box>
 
             </Box>
         </Box>
