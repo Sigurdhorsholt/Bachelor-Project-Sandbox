@@ -24,26 +24,6 @@ import {setAuth} from "../Redux/auth/authSlice.ts";
 import {useDispatch} from "react-redux";
 import {useNavigate} from "react-router-dom";
 
-
-// Mobile-first landing page using Material UI components and Tailwind utility classes
-// Requirements met:
-// - Mobile first layout
-// - Meeting ID form that prevents submit default (no action)
-// - Small Admin Login button that opens a modal with username/password
-// For the LandingPage component, integrate RTK Query login as shown:
-// import { useLoginMutation } from "../Redux/api";
-// const [login, { isLoading, error }] = useLoginMutation();
-// const handleLogin = async (e: React.FormEvent) => {
-//   e.preventDefault();
-//   try {
-//     const result = await login({ email: adminUser, password: adminPass }).unwrap();
-//     console.log('Logged in:', result);
-//     handleCloseLogin();
-//   } catch (err) {
-//     console.error('Login failed', err);
-//   }
-// };
-// Attach `onSubmit={handleLogin}` to the form in the Admin login modal.
 export default function LandingPage() {
     const [meetingId, setMeetingId] = useState("");
     const [loginOpen, setLoginOpen] = useState(false);
@@ -74,10 +54,14 @@ export default function LandingPage() {
         } catch (error){
             console.error('Login failed', error);
         }
-
-
     }
 
+    const handleGoToMeeting = async () => {
+        if (meetingId.trim() !== "") {
+            nav(`/meeting/${meetingId}/login`);
+        }
+    };
+    
 
     return (
         <div className="min-h-screen flex flex-col bg-gradient-to-b from-white to-slate-50 text-slate-900">
@@ -155,6 +139,7 @@ export default function LandingPage() {
                             size="large"
                             className="sm:!w-40 !rounded-xl"
                             disableElevation
+                            onClick={handleGoToMeeting}
                         >
                             Gå ind
                         </Button>

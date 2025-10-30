@@ -88,10 +88,101 @@ public class AuthController : ControllerBase
        });
    }
 
-   
-   
+   public record AttendeeLoginRequest(string MeetingCode, string AccessCode);
+   public record AttendeeLoginResponse(string AccessToken, DateTime ExpiresAt, Guid MeetingId, Guid TicketId);
 
-    private string IssueJwt(string email, string[] roles, TimeSpan lifetime)
+   [HttpPost("attendee/login")]
+   [AllowAnonymous]
+   public async Task<IActionResult> AttendeeLogin([FromBody] AttendeeLoginRequest req, CancellationToken ct)
+   {
+       // Find meeting by code (case-insensitive using ILike for PostgreSQL)
+       var meeting = await _db.Meetings
+           .Include(m => m.AdmissionTickets)
+           .FirstOrDefaultAsync(m => EF.Functions.ILike(m.MeetingCode, req.MeetingCode), ct);
+
+       if (meeting is null)
+           return Unauthorized(new { error = "Invalid meeting code" });
+
+       // Find unused admission ticket with matching code (case-insensitive)
+       // Do this in-memory since the collection is already loaded
+       var ticket = meeting.AdmissionTickets
+           .FirstOrDefault(t => string.Equals(t.Code, req.AccessCode, StringComparison.OrdinalIgnoreCase) && !t.Used);
+
+       if (ticket is null)
+       {
+           // Debug logging
+           var availableTickets = meeting.AdmissionTickets
+               .Where(t => !t.Used)
+               .Select(t => t.Code)
+               .ToList();
+           
+           return Unauthorized(new { 
+               error = "Invalid or already used access code",
+               debug = new { 
+                   requestedCode = req.AccessCode,
+                   availableTickets = availableTickets.Count,
+                   totalTickets = meeting.AdmissionTickets.Count,
+                   codes = availableTickets
+               }
+           });
+       }
+
+       // Mark ticket as used
+       ticket.Used = true;
+       await _db.SaveChangesAsync(ct);
+
+       // Issue attendee JWT with different audience
+       var token = IssueAttendeeJwt(meeting.Id, ticket.Id, ticket.Code, TimeSpan.FromHours(4));
+       var expires = DateTime.UtcNow.AddHours(4);
+
+       return Ok(new AttendeeLoginResponse(token, expires, meeting.Id, ticket.Id));
+   }
+
+   [HttpGet("attendee/me")]
+   [Authorize(Policy = "AttendeeOnly")]
+   public IActionResult AttendeeMe()
+   {
+       var meetingIdClaim = User.FindFirst("meetingId")?.Value;
+       var ticketIdClaim = User.FindFirst("ticketId")?.Value;
+       var ticketCode = User.FindFirst("ticketCode")?.Value;
+
+       if (meetingIdClaim is null || ticketIdClaim is null)
+           return Unauthorized();
+
+       return Ok(new
+       {
+           meetingId = Guid.Parse(meetingIdClaim),
+           ticketId = Guid.Parse(ticketIdClaim),
+           ticketCode,
+           type = "attendee"
+       });
+   }
+
+   private string IssueAttendeeJwt(Guid meetingId, Guid ticketId, string ticketCode, TimeSpan lifetime)
+   {
+       var creds = new SigningCredentials(_key, SecurityAlgorithms.HmacSha256);
+       var now = DateTime.UtcNow;
+       var claims = new List<Claim>
+       {
+           new("meetingId", meetingId.ToString()),
+           new("ticketId", ticketId.ToString()),
+           new("ticketCode", ticketCode),
+           new(ClaimTypes.Role, "Attendee")
+       };
+
+       var jwt = new JwtSecurityToken(
+           issuer: _issuer,
+           audience: "attendee",
+           claims: claims,
+           notBefore: now,
+           expires: now.Add(lifetime),
+           signingCredentials: creds
+       );
+
+       return new JwtSecurityTokenHandler().WriteToken(jwt);
+   }
+
+   private string IssueJwt(string email, string[] roles, TimeSpan lifetime)
     {
         var creds = new SigningCredentials(_key, SecurityAlgorithms.HmacSha256);
         var now = DateTime.UtcNow;
@@ -99,7 +190,7 @@ public class AuthController : ControllerBase
         claims.AddRange(roles.Select(r => new Claim(ClaimTypes.Role, r)));
 
         var jwt = new JwtSecurityToken(
-            issuer: _issuer, audience: null,
+            issuer: _issuer, audience: "admin",
             claims: claims,
             notBefore: now, expires: now.Add(lifetime),
             signingCredentials: creds

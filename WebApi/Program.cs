@@ -33,13 +33,21 @@ builder.Services
     {
         o.TokenValidationParameters = new TokenValidationParameters {
             ValidateIssuer = true, ValidIssuer = jwtIssuer,
-            ValidateAudience = false,
+            ValidateAudience = true,
+            ValidAudiences = new[] { "admin", "attendee" },
             ValidateIssuerSigningKey = true, IssuerSigningKey = signingKey,
             ValidateLifetime = true, ClockSkew = TimeSpan.FromMinutes(1)
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AttendeeOnly", policy =>
+        policy.RequireRole("Attendee"));
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireAssertion(context =>
+            context.User.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.Role && c.Value != "Attendee")));
+});
 
 var app = builder.Build();
 
