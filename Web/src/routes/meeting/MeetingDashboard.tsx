@@ -131,7 +131,7 @@ export const MeetingDashboard: React.FC = () => {
         };
     }, [meetingId]);
 
-    const submitVote = async () => {
+    const submitVote = async () => { 
         if (!meeting || !proposition || !selectedOption) return;
         if (alreadyVoted) {
             setCastError("Du har allerede stemt på dette punkt.");

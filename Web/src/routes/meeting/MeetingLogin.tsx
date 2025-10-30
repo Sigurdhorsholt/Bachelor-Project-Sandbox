@@ -1,6 +1,6 @@
-import { useState } from "react";
+import {useEffect, useState} from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import {
     Container,
     Paper,
@@ -13,6 +13,7 @@ import {
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import { useAttendeeLoginMutation } from "../../Redux/api";
 import { setAttendeeAuth } from "../../Redux/attendeeAuth/attendeeAuthSlice";
+import type { RootState } from "../../Redux/store";
 
 export default function MeetingLogin() {
     const { id: meetingCode } = useParams<{ id: string }>();
@@ -20,6 +21,7 @@ export default function MeetingLogin() {
     const [attendeeLogin, { isLoading, error }] = useAttendeeLoginMutation();
     const dispatch = useDispatch();
     const nav = useNavigate();
+    const attendeeAuth = useSelector((s: RootState) => s.attendeeAuth);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -36,14 +38,18 @@ export default function MeetingLogin() {
                 meetingId: result.meetingId,
                 ticketId: result.ticketId,
             }));
-
-            // Redirect to the meeting dashboard
-            console.log(meetingCode)
-            nav(`/meeting/${meetingCode}/live`, { replace: true });
+            console.log(meetingCode);
         } catch (err) {
             console.error("Attendee login failed:", err);
         }
     };
+
+    // Delay navigation until attendeeAuth is set
+    useEffect(() => {
+        if (attendeeAuth.accessToken && attendeeAuth.meetingId) {
+            nav(`/meeting/${attendeeAuth.meetingId}/live`, { replace: true });
+        }
+    }, [attendeeAuth.accessToken, attendeeAuth.meetingId, nav]);
 
     return (
         <div className="min-h-screen flex flex-col bg-gradient-to-b from-white to-slate-50">
@@ -99,4 +105,3 @@ export default function MeetingLogin() {
         </div>
     );
 }
-
