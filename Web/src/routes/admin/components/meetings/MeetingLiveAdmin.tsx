@@ -27,7 +27,7 @@ import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import PowerSettingsNewRoundedIcon from "@mui/icons-material/PowerSettingsNewRounded";
 
 import { useGetMeetingFullQuery } from "../../../../Redux/meetingsApi.ts";
-import ManualBallots from "./meetingLiveAdmin/ManualBallots";
+import SignalRProbeMini from "../../../../services/SignalRProbeMini.tsx";
 
 export default function MeetingLiveAdmin() {
     const { id } = useParams() as { id?: string };
@@ -484,6 +484,10 @@ export default function MeetingLiveAdmin() {
                 </Box>
 
             </Box>
+            
+            
+            <SignalRProbeMini />
+            
         </Box>
     );
 }

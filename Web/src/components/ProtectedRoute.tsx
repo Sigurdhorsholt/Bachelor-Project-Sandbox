@@ -8,8 +8,8 @@ type Props = { roles?: string[] };
 
 export default function ProtectedRoute({ roles }: Props) {
 
-    const token = useSelector((s: RootState) => {
-        return s.auth.accessToken;
+    const token = useSelector((state: RootState) => {
+        return state.auth.accessToken;
     });
     
     const { data, isFetching, isError } = useMeQuery(undefined, { skip: !token });

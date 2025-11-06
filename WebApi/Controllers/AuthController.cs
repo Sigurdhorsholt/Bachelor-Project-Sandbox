@@ -47,16 +47,7 @@ public class AuthController : ControllerBase
 
         return Ok(new LoginResponse(token, expires, user.Email, roles));
     }
-
-   /* [HttpGet("me")]
-    [Authorize]
-    public IActionResult Me()
-    {
-        var email = User.Identity?.Name ?? "";
-        var roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToArray();
-        return Ok(new { email, roles });
-    }
-    */
+    
    
    [HttpGet("me")]
    [Authorize]
