@@ -271,11 +271,20 @@ export const meetingsApi = api.injectEndpoints({
 
         // Replace tickets (clear existing and generate `count` new ones)
         replaceTickets: b.mutation<TicketDto[], { meetingId: string; count: number }>({
-            query: ({ meetingId, count }) => ({ url: `/meetings/${meetingId}/codes/replace?count=${count}`, method: "POST" }),
+            query: ({ meetingId, count }) => ({ url: `/meetings/${meetingId}/codes/replace?count=${count}`,
+                method: "POST" 
+            }),
             invalidatesTags: (_r, _e, { meetingId }) => [
                 { type: "Ticket", id: `LIST-${meetingId}` },
                 { type: "MeetingAccess", id: meetingId },
             ],
+        }),
+
+        startMeeting: b.mutation<void, { id: string }>({
+            query: ({ id }) => ({ url: `/meetings/${id}/start`,
+                method: "POST"
+            }),
+            invalidatesTags: (r, e, { id }) => [{ type: "Meeting", id }],
         }),
 
     }),
@@ -342,4 +351,6 @@ export const {
     useGenerateTicketsMutation,
     useClearTicketsMutation,
     useReplaceTicketsMutation,
+    
+    useStartMeetingMutation,
 } = meetingsApi;

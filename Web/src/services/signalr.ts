@@ -8,8 +8,8 @@ export function buildMeetingHub(
     const envBase = typeof import.meta !== 'undefined' ? (import.meta.env?.VITE_API_URL as string | undefined) : undefined;
     const effectiveBase = baseUrl || envBase || '';
     const url = effectiveBase
-        ? `${effectiveBase.replace(/\/$/, '')}/hub/meeting`
-        : `/hub/meeting`;
+        ? `${effectiveBase.replace(/\/$/, '')}/hub/meetings`
+        : `/hub/meetings`;
 
     return new SignalR.HubConnectionBuilder()
         .withUrl(url, {

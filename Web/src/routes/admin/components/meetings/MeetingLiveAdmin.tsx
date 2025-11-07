@@ -28,6 +28,7 @@ import PowerSettingsNewRoundedIcon from "@mui/icons-material/PowerSettingsNewRou
 
 import { useGetMeetingFullQuery } from "../../../../Redux/meetingsApi.ts";
 import SignalRProbeMini from "../../../../services/SignalRProbeMini.tsx";
+import MeetingLiveTestCard from "../../../../services/MeetingLiveTestCard.tsx";
 
 export default function MeetingLiveAdmin() {
     const { id } = useParams() as { id?: string };
@@ -484,9 +485,11 @@ export default function MeetingLiveAdmin() {
                 </Box>
 
             </Box>
+
+            {meeting &&
+                <MeetingLiveTestCard meetingId={meeting.id}/>
+            }
             
-            
-            <SignalRProbeMini />
             
         </Box>
     );

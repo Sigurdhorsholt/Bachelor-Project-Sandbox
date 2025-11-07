@@ -21,8 +21,9 @@ builder.Services.AddCors(opts =>
         .AllowAnyOrigin()
         .AllowAnyHeader()
         .AllowAnyMethod()));
-builder.Services.AddSingleton<IGreetingService, GreetingService>();
 builder.Services.AddSignalR();
+builder.Services.AddScoped<IMeetingBroadcaster, MeetingBroadcaster>();
+builder.Services.AddSingleton<IGreetingService, GreetingService>();
 builder.Services.AddControllers();
 
 var jwtKey   = builder.Configuration["Jwt:Key"]    ?? throw new Exception("Jwt:Key missing");
@@ -47,7 +48,7 @@ builder.Services
             {
                 var accessToken = context.Request.Query["access_token"].FirstOrDefault();
                 var path = context.HttpContext.Request.Path;
-                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hub/meeting"))
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hub/meetings"))
                 {
                     context.Token = accessToken;
                 }
@@ -82,10 +83,11 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseHttpsRedirection();
 app.UseDefaultFiles(); 
+app.UseRouting();
+
 app.UseStaticFiles();
 app.MapControllers();
-
-app.MapHub<MeetingHub>("/hub/meeting");
+app.MapHub<MeetingHub>("/hub/meetings");
 
 //FAil fast test - if DB doesn't exist we crash here
 using (var scope = app.Services.CreateScope())

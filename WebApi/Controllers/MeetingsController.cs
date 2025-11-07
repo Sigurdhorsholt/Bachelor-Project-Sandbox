@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 using System.Linq;
 using Microsoft.Extensions.Logging;
+using WebApi.Realtime;
 using WebApi.Services;
 
 namespace WebApi.Controllers;
@@ -17,12 +18,19 @@ public class MeetingsController : ControllerBase
     private readonly AppDbContext _db;
     private readonly ILogger<MeetingsController> _logger;
     private readonly IMeetingCodeService _codeService;
+    private readonly IMeetingBroadcaster _broadcast;
 
-    public MeetingsController(AppDbContext db, ILogger<MeetingsController> logger, IMeetingCodeService codeService)
+
+    public MeetingsController(
+        AppDbContext db,
+        ILogger<MeetingsController> logger,
+        IMeetingCodeService codeService,
+        IMeetingBroadcaster broadcast)
     {
         _db = db;
         _logger = logger;
         _codeService = codeService;
+        _broadcast = broadcast;
     }
 
     // GET: /api/meetings/{id}
@@ -131,4 +139,31 @@ public class MeetingsController : ControllerBase
             }).ToList()
         });
     }
+    
+    
+    [HttpPost("{id}/start")]
+    public async Task<IActionResult> StartMeeting(string id, CancellationToken cancellationToken)
+    {
+        var meeting = await _db.Meetings.FirstOrDefaultAsync(x => x.Id == Guid.Parse(id), cancellationToken);
+        
+        if (meeting is null)
+        {
+            return NotFound();
+        }
+
+        if ((MeetingStarted)meeting.Started == MeetingStarted.NotStarted)
+        {
+            return NoContent();
+        }
+
+        meeting.Started = (int)MeetingStarted.Started;
+        //TODO: Add meeting started At time
+        await _db.SaveChangesAsync(cancellationToken);
+
+        await _broadcast.MeetingStarted(meeting.Id.ToString());
+        await _broadcast.MeetingStateChanged(meeting.Id.ToString(), meeting.Started);
+
+        return NoContent();
+    }
+    
 }

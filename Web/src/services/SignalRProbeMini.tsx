@@ -15,7 +15,7 @@ type Props = {
 };
 
 const SignalRProbeMini: React.FC<Props> = ({
-                                               hubUrl = "/hub/meeting",
+                                               hubUrl = "/hub/meetings",
                                                jwt,
                                                subscribeTo = "Broadcast",
                                            }) => {
