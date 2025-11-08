@@ -4,9 +4,9 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AdminDashboard from "./routes/admin/AdminDashboard.tsx";
 import MeetingEditor from "./routes/admin/components/meetings/MeetingEditor.tsx";
 import MeetingLiveAdmin from "./routes/admin/components/meetings/MeetingLiveAdmin.tsx";
-import {MeetingDashboard} from "./routes/meeting/MeetingDashboard.tsx";
 import ProtectedMeetingRoute from "./components/ProtectedMeetingRoute.tsx";
 import MeetingLogin from "./routes/meeting/MeetingLogin.tsx";
+import {MeetingAttendeeDashboard} from "./routes/meeting/MeetingAttendeeDashboard.tsx";
 
 
 
@@ -25,7 +25,7 @@ const router = createBrowserRouter([
     {
         element: <ProtectedMeetingRoute/>,
         children: [
-            {path: "/meeting/:id/live", element: <MeetingDashboard/>},
+            {path: "/meeting/:id/live", element: <MeetingAttendeeDashboard/>},
         ],
     }
 ]);

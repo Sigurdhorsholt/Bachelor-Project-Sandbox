@@ -45,3 +45,12 @@ export type MeetingFullDto = MeetingDto & {
     propositions: { id: string; question: string; voteType: string }[];
   }[];
 };
+
+export type PublicMeetingMeta = {
+    id: string;
+    title: string;
+    startsAtUtc?: string | null;
+    status?: string;
+    started?: number;
+    locationName?: string | null;
+};

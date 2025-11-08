@@ -50,7 +50,6 @@ public class AuthController : ControllerBase
     
    
    [HttpGet("me")]
-   [Authorize]
    public async Task<IActionResult> Me()
    {
        var email = User.Identity?.Name ?? "";

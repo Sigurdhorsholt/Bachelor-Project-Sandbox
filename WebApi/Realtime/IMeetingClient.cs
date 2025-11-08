@@ -12,6 +12,8 @@ namespace WebApi.Realtime
         // Observer events:
         Task MeetingStateChanged(MeetingStateChangedDto dto);
         Task MeetingStarted(MeetingStartedDto dto);
+        Task MeetingStopped(MeetingStoppedDto dto);
+
         // (optional) admin-only events
         Task AdminNotice(AdminNoticeDto dto);
     }
@@ -19,6 +21,8 @@ namespace WebApi.Realtime
     // Tiny DTOs for clarity & evolvability
     public record MeetingStateChangedDto(string MeetingId, int State);
     public record MeetingStartedDto(string MeetingId);
+    public record MeetingStoppedDto(string MeetingId);
+
     public record AdminNoticeDto(string MeetingId, string Message, DateTime AtUtc);
 }
 

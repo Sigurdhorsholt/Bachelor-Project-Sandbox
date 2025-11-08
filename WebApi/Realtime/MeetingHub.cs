@@ -47,15 +47,41 @@ public class MeetingHub : Hub<IMeetingClient>
     }
 
     // Subscription API (Observer attach/detach)
-    public Task JoinMeeting(string meetingId)
+    public async Task JoinMeeting(string meetingId)
     {
-        return Groups.AddToGroupAsync(Context.ConnectionId, MeetingGroup(meetingId));
+        try
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, MeetingGroup(meetingId));
+            var userName = Context.User?.Identity?.Name ?? "<anonymous>";
+            var isAdmin = Context.User?.IsInRole("Admin") == true;
+            _logger.LogInformation("SignalR connection {ConnectionId} (User={User}) joined group {Group} (IsAdmin={IsAdmin})",
+                Context.ConnectionId, userName, MeetingGroup(meetingId), isAdmin);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error adding connection {ConnectionId} to group {Group}", Context.ConnectionId, MeetingGroup(meetingId));
+            throw;
+        }
     }
     
-    public Task LeaveMeeting(string meetingId)
+    public async Task LeaveMeeting(string meetingId)
     {
-        return Groups.RemoveFromGroupAsync(Context.ConnectionId, MeetingGroup(meetingId));
+        try
+        {
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, MeetingGroup(meetingId));
+            var userName = Context.User?.Identity?.Name ?? "<anonymous>";
+            var isAdmin = Context.User?.IsInRole("Admin") == true;
+            _logger.LogInformation("SignalR connection {ConnectionId} (User={User}) left group {Group} (IsAdmin={IsAdmin})",
+                Context.ConnectionId, userName, MeetingGroup(meetingId), isAdmin);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error removing connection {ConnectionId} from group {Group}", Context.ConnectionId, MeetingGroup(meetingId));
+            throw;
+        }
     }
+
+    
     
     
     

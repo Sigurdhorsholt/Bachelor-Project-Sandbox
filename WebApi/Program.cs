@@ -67,6 +67,7 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+app.UseRouting();
 
 if (app.Environment.IsDevelopment())
 {
@@ -83,7 +84,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseHttpsRedirection();
 app.UseDefaultFiles(); 
-app.UseRouting();
 
 app.UseStaticFiles();
 app.MapControllers();
