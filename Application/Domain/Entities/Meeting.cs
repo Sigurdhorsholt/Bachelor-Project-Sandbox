@@ -7,6 +7,12 @@ public enum MeetingStatus
     Published = 2,
     Finished = 3
 }
+
+public enum MeetingStarted
+{
+    NotStarted = 0,
+    Started = 1
+}
 public class Meeting
 {
     public Guid Id { get; set; }
@@ -15,6 +21,7 @@ public class Meeting
     public DateTime StartsAtUtc { get; set; }
     public MeetingStatus Status { get; set; } = MeetingStatus.Draft;
     public string MeetingCode { get; set; } = "";
+    public int Started { get; set; }
 
 
     public Division Division { get; set; } = null!;

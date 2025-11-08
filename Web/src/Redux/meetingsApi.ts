@@ -1,5 +1,8 @@
 import { api } from "./api";
-import type { MeetingStatus, MeetingDto, MeetingListItemDto, MeetingStatusName, CreateMeetingPayload, MeetingFullDto } from "../domain/meetings";
+import type {
+    MeetingStatus, MeetingDto, MeetingListItemDto, MeetingStatusName, CreateMeetingPayload, MeetingFullDto,
+    PublicMeetingMeta
+} from "../domain/meetings";
 import type { AgendaItemDto } from "../domain/agenda";
 import type { PropositionDto } from "../domain/propositions";
 import type { VoteOptionDto } from "../domain/voteOptions";
@@ -48,6 +51,7 @@ export const meetingsApi = api.injectEndpoints({
                 startsAtUtc: i.startsAtUtc ?? i.StartsAtUtc,
                 status: normalizeStatus(i.status ?? i.Status),
                 meetingCode: i.meetingCode ?? i.MeetingCode ?? undefined,
+                started: i.started ?? i.Started ?? 0,
             }) as MeetingDto,
         }),
 
@@ -64,6 +68,7 @@ export const meetingsApi = api.injectEndpoints({
                 startsAtUtc: raw.startsAtUtc ?? raw.StartsAtUtc,
                 status: normalizeStatus(raw.status ?? raw.Status),
                 meetingCode: raw.meetingCode ?? raw.MeetingCode ?? undefined,
+                started: raw.started ?? raw.Started ?? 0,
                 agenda: (raw.agenda ?? raw.Agenda ?? []).map((a: any) => ({
                     id: a.id,
                     title: a.title,
@@ -77,6 +82,23 @@ export const meetingsApi = api.injectEndpoints({
             }) as MeetingFullDto,
         }),
 
+        getMeetingPublic: b.query<PublicMeetingMeta, string>({
+            // backend: GET /api/meetings/meta?code={code}
+            query: (meetingId) => `/meetings/meta?meetingId=${meetingId}`,
+            providesTags: (result, _err, meetingId) => [
+                { type: "Meeting" as const, id: result?.id ?? `CODE-${meetingId}` }
+            ],
+            transformResponse: (raw: any) =>
+                ({
+                    id: raw.id,
+                    title: raw.title,
+                    startsAtUtc: raw.startsAtUtc ?? raw.StartsAtUtc ?? null,
+                    status: raw.status ?? raw.Status ?? undefined,
+                    started: (raw.started ?? raw.Started) ?? 0,
+                    locationName: raw.locationName ?? raw.LocationName ?? raw.location ?? null,
+                } as PublicMeetingMeta),
+        }),
+        
         patchMeeting: b.mutation<
             { id: string; divisionId: string; title: string; startsAtUtc: string; status: string; agenda?: any[]; meetingCode?: string },
             { meetingId: string; patch: Partial<{ title: string; startsAtUtc: string; status: MeetingStatus | MeetingStatusName; regenerateMeetingCode?: boolean }>; divisionId?: string }
@@ -271,11 +293,27 @@ export const meetingsApi = api.injectEndpoints({
 
         // Replace tickets (clear existing and generate `count` new ones)
         replaceTickets: b.mutation<TicketDto[], { meetingId: string; count: number }>({
-            query: ({ meetingId, count }) => ({ url: `/meetings/${meetingId}/codes/replace?count=${count}`, method: "POST" }),
+            query: ({ meetingId, count }) => ({ url: `/meetings/${meetingId}/codes/replace?count=${count}`,
+                method: "POST" 
+            }),
             invalidatesTags: (_r, _e, { meetingId }) => [
                 { type: "Ticket", id: `LIST-${meetingId}` },
                 { type: "MeetingAccess", id: meetingId },
             ],
+        }),
+
+        startMeeting: b.mutation<void, { id: string }>({
+            query: ({ id }) => ({ url: `/meetings/${id}/start`,
+                method: "POST"
+            }),
+            invalidatesTags: (r, e, { id }) => [{ type: "Meeting", id }],
+        }),
+
+        stopMeeting: b.mutation<void, { id: string }>({
+            query: ({ id }) => ({ url: `/meetings/${id}/stop`,
+                method: "POST"
+            }),
+            invalidatesTags: (r, e, { id }) => [{ type: "Meeting", id }],
         }),
 
     }),
@@ -319,6 +357,7 @@ export const {
     useGetMeetingQuery,
     useGetMeetingFullQuery,
     usePatchMeetingMutation,
+    useGetMeetingPublicQuery,
 
     useGetAgendaQuery,
     useCreateAgendaItemMutation,
@@ -342,4 +381,7 @@ export const {
     useGenerateTicketsMutation,
     useClearTicketsMutation,
     useReplaceTicketsMutation,
+    
+    useStartMeetingMutation,
+    useStopMeetingMutation,
 } = meetingsApi;

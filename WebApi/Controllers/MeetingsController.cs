@@ -6,7 +6,9 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
 using System.Linq;
 using Microsoft.Extensions.Logging;
+using WebApi.Realtime;
 using WebApi.Services;
+using WebApi.DTOs;
 
 namespace WebApi.Controllers;
 
@@ -14,15 +16,22 @@ namespace WebApi.Controllers;
 [Route("api/meetings")]
 public class MeetingsController : ControllerBase
 {
-    private readonly AppDbContext _db;
+    private AppDbContext _db;
     private readonly ILogger<MeetingsController> _logger;
     private readonly IMeetingCodeService _codeService;
+    private readonly IMeetingBroadcaster _broadcast;
 
-    public MeetingsController(AppDbContext db, ILogger<MeetingsController> logger, IMeetingCodeService codeService)
+
+    public MeetingsController(
+        AppDbContext db,
+        ILogger<MeetingsController> logger,
+        IMeetingCodeService codeService,
+        IMeetingBroadcaster broadcast)
     {
         _db = db;
         _logger = logger;
         _codeService = codeService;
+        _broadcast = broadcast;
     }
 
     // GET: /api/meetings/{id}
@@ -43,6 +52,7 @@ public class MeetingsController : ControllerBase
             StartsAtUtc = m.StartsAtUtc,
             Status = m.Status.ToString(),
             MeetingCode = m.MeetingCode,
+            Started = m.Started,
             Agenda = m.AgendaItems.Select(a => new
             {
                 a.Id,
@@ -122,6 +132,7 @@ public class MeetingsController : ControllerBase
             StartsAtUtc = updated.StartsAtUtc,
             Status = updated.Status.ToString(),
             MeetingCode = updated.MeetingCode,
+            Started = updated.Started,
             Agenda = updated.AgendaItems.Select(a => new
             {
                 a.Id,
@@ -130,5 +141,90 @@ public class MeetingsController : ControllerBase
                 Propositions = a.Propositions.Select(p => new { p.Id, Question = p.Question, VoteType = p.VoteType }).ToList()
             }).ToList()
         });
+    }
+    
+    
+    [HttpPost("{id}/start")]
+    public async Task<IActionResult> StartMeeting(string id, CancellationToken cancellationToken)
+    {
+        var meeting = await _db.Meetings
+            .AsTracking()
+            .FirstOrDefaultAsync(x => x.Id == Guid.Parse(id), cancellationToken);
+        
+        if (meeting is null)
+        {
+            return NotFound();
+        }
+
+        // If it is already started, be idempotent
+        var startedValue = (int)MeetingStarted.Started;
+        if (meeting.Started == startedValue)
+        {
+            return NoContent();
+        }
+
+        meeting.Started = startedValue;
+        //TODO: Add meeting started At time
+        await _db.SaveChangesAsync(cancellationToken);
+
+        await _broadcast.MeetingStarted(meeting.Id.ToString());
+        await _broadcast.MeetingStateChanged(meeting.Id.ToString(), meeting.Started);
+
+        return NoContent();
+    }
+    
+    
+    [HttpPost("{id}/stop")]
+    public async Task<IActionResult> StopMeeting(string id, CancellationToken cancellationToken)
+    {
+        var meeting = await _db.Meetings
+            .AsTracking()
+            .FirstOrDefaultAsync(x => x.Id == Guid.Parse(id), cancellationToken);
+        
+        if (meeting is null)
+        {
+            return NotFound();
+        }
+
+        // If it is already started, be idempotent
+        var stoppedValue = (int)MeetingStarted.NotStarted;
+        if (meeting.Started == stoppedValue)
+        {
+            return NoContent();
+        }
+
+        meeting.Started = stoppedValue;
+        //TODO: Add meeting started At time
+        await _db.SaveChangesAsync(cancellationToken);
+
+        await _broadcast.MeetingStopped(meeting.Id.ToString());
+        await _broadcast.MeetingStateChanged(meeting.Id.ToString(), meeting.Started);
+
+        return NoContent();
+    }
+    
+    // GET: /api/meetings/meta?id={meetingCode}
+    [HttpGet("meta")]
+    public async Task<IActionResult> GetMeetingMeta([FromQuery] string meetingId, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(meetingId)) return BadRequest("Meeting code is required.");
+        
+        var meeting = await _db.Meetings
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id.ToString() == meetingId, cancellationToken);
+        
+        if (meeting == null) return null;
+        
+        var meetingMetaDto = new MeetingMetaDto
+        {
+            Id = meeting.Id,
+            Title = meeting.Title,
+            StartsAtUtc = meeting.StartsAtUtc,
+            Status = meeting.Status.ToString(),
+            MeetingCode = meeting.MeetingCode,
+            Started = meeting.Started
+        };
+        
+        return Ok(meetingMetaDto);
     }
 }

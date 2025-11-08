@@ -4,6 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
+using WebApi.DTOs;
+using Application.Domain.Entities;
 
 namespace WebApi.Services;
 

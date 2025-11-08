@@ -38,7 +38,7 @@ export default function MeetingLogin() {
                 meetingId: result.meetingId,
                 ticketId: result.ticketId,
             }));
-            console.log(meetingCode);
+            console.log("lol s", meetingCode);
         } catch (err) {
             console.error("Attendee login failed:", err);
         }
@@ -47,6 +47,8 @@ export default function MeetingLogin() {
     // Delay navigation until attendeeAuth is set
     useEffect(() => {
         if (attendeeAuth.accessToken && attendeeAuth.meetingId) {
+            console.log("going to", meetingCode);
+
             nav(`/meeting/${attendeeAuth.meetingId}/live`, { replace: true });
         }
     }, [attendeeAuth.accessToken, attendeeAuth.meetingId, nav]);

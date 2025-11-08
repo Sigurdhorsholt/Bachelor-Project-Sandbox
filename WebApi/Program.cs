@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using WebApi.Infrastructure;
 using WebApi.Realtime;
+using System.Threading.Tasks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,8 +21,9 @@ builder.Services.AddCors(opts =>
         .AllowAnyOrigin()
         .AllowAnyHeader()
         .AllowAnyMethod()));
-builder.Services.AddSingleton<IGreetingService, GreetingService>();
 builder.Services.AddSignalR();
+builder.Services.AddScoped<IMeetingBroadcaster, MeetingBroadcaster>();
+builder.Services.AddSingleton<IGreetingService, GreetingService>();
 builder.Services.AddControllers();
 
 var jwtKey   = builder.Configuration["Jwt:Key"]    ?? throw new Exception("Jwt:Key missing");
@@ -38,6 +40,21 @@ builder.Services
             ValidateIssuerSigningKey = true, IssuerSigningKey = signingKey,
             ValidateLifetime = true, ClockSkew = TimeSpan.FromMinutes(1)
         };
+
+        // Allow access_token query string when connecting to SignalR hubs (WebSockets can't send Authorization header)
+        o.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"].FirstOrDefault();
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hub/meetings"))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization(options =>
@@ -50,6 +67,7 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+app.UseRouting();
 
 if (app.Environment.IsDevelopment())
 {
@@ -60,22 +78,21 @@ app.UseCors();
 
 if (!app.Environment.IsDevelopment())
 {
-    app.UseHsts(); // optional for dev, good for prod
+    app.UseHsts();
 }
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseHttpsRedirection();
 app.UseDefaultFiles(); 
+
 app.UseStaticFiles();
 app.MapControllers();
-app.MapHub<PresenceHub>("/hub/presence");
+app.MapHub<MeetingHub>("/hub/meetings");
 
-//FAil fast test - if DB doesnt exist we crash here
+//FAil fast test - if DB doesn't exist we crash here
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    // Don’t run migrations, don’t recreate schema
-    // Just verify the file is accessible
     await db.Database.OpenConnectionAsync();
     await db.Database.CloseConnectionAsync();
 }
@@ -85,6 +102,8 @@ app.Logger.LogInformation("Using DB: {Path}",
 
 app.MapFallbackToFile("index.html");
 
+
+// Just to generate a hash for seeding an admin user
 Console.WriteLine(BCrypt.Net.BCrypt.HashPassword("admin"));
 
 

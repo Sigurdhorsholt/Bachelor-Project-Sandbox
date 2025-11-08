@@ -47,11 +47,13 @@ export const api = createApi({
         login: b.mutation<{ accessToken: string; expiresAt: string; email: string; roles: string[] }, { email: string; password: string }>({
             query: (body) => ({ url: "/auth/login", method: "POST", body }),
         }),
+        
         me: b.query<MeResponse, void>({ query: () => ({ url: "/auth/me" }) }),
         
         attendeeLogin: b.mutation<{ accessToken: string; expiresAt: string; meetingId: string; ticketId: string }, { meetingCode: string; accessCode: string }>({
             query: (body) => ({ url: "/auth/attendee/login", method: "POST", body }),
         }),
+        
         attendeeMe: b.query<AttendeeMeResponse, void>({ query: () => ({ url: "/auth/attendee/me" }) }),
     }),
 });

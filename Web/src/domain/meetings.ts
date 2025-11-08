@@ -15,8 +15,9 @@ export type MeetingDto = {
   divisionId: string;
   title: string;
   startsAtUtc: string;
-  status: MeetingStatusName; // enum name string
-  meetingCode?: string | undefined; // optional meeting code returned by backend
+  status: MeetingStatusName;
+  meetingCode?: string | undefined;
+  started: number;
 };
 
 // List item DTO (division meetings list returns string Status)
@@ -43,4 +44,13 @@ export type MeetingFullDto = MeetingDto & {
     description?: string | null;
     propositions: { id: string; question: string; voteType: string }[];
   }[];
+};
+
+export type PublicMeetingMeta = {
+    id: string;
+    title: string;
+    startsAtUtc?: string | null;
+    status?: string;
+    started?: number;
+    locationName?: string | null;
 };
