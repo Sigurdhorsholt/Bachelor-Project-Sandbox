@@ -19,6 +19,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Ballot> Ballots => Set<Ballot>();
     public DbSet<Vote> Votes => Set<Vote>();
     public DbSet<AuditableEvent> AuditableEvents => Set<AuditableEvent>();
+    public DbSet<Votation> Votations => Set<Votation>();
+
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -116,6 +118,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasOne(a => a.Vote)
             .WithOne(v => v.AuditableEvent)
             .HasForeignKey<AuditableEvent>(a => a.VoteId);
+        
+        b.Entity<Votation>().ToTable("votation");
+
+        b.Entity<Votation>()
+            .HasOne(v => v.Meeting)
+            .WithMany()
+            .HasForeignKey(v => v.MeetingId);
+
+        b.Entity<Votation>()
+            .HasOne(v => v.Proposition)
+            .WithMany()
+            .HasForeignKey(v => v.PropositionId);
+
+        b.Entity<Votation>().Property(v => v.Open).HasDefaultValue(false);
+        b.Entity<Votation>().Property(v => v.Overwritten).HasDefaultValue(false);
 
         // 2) Make **all column names** lowercase to match your physical columns
         foreach (var entity in b.Model.GetEntityTypes())

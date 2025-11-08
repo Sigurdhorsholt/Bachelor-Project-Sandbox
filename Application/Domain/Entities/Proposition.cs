@@ -9,4 +9,6 @@ public class Proposition
 
     public AgendaItem AgendaItem { get; set; } = null!;
     public ICollection<VoteOption> Options { get; set; } = new List<VoteOption>();
+    public ICollection<Votation> Votations { get; set; } = new List<Votation>();
+
 }

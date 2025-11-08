@@ -27,4 +27,6 @@ public class Meeting
     public Division Division { get; set; } = null!;
     public ICollection<AgendaItem> AgendaItems { get; set; } = new List<AgendaItem>();
     public ICollection<AdmissionTicket> AdmissionTickets { get; set; } = new List<AdmissionTicket>();
+    public ICollection<Votation> Votations { get; set; } = new List<Votation>();
+
 }

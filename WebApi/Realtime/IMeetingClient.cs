@@ -16,6 +16,9 @@ namespace WebApi.Realtime
 
         // (optional) admin-only events
         Task AdminNotice(AdminNoticeDto dto);
+        
+        Task PropositionVoteOpened(PropositionOpenedDto dto);
+        Task PropositionVoteStopped(VotationStoppedDto dto);
     }
     
     // Tiny DTOs for clarity & evolvability
@@ -24,5 +27,10 @@ namespace WebApi.Realtime
     public record MeetingStoppedDto(string MeetingId);
 
     public record AdminNoticeDto(string MeetingId, string Message, DateTime AtUtc);
+    
+    
+    public record PropositionOpenedDto(string MeetingId, string PropositionId, string VotationId);
+    public record VotationStoppedDto(string MeetingId, string PropositionId, string VotationId, DateTime StoppedAtUtc);
+
 }
 

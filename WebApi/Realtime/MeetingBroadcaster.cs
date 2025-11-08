@@ -10,6 +10,10 @@ public interface IMeetingBroadcaster
     Task MeetingStopped(string meetingId);
 
     Task AdminNotice(string meetingId, string message);
+    
+    Task MeetingPropositionOpened(string meetingId, string propositionId, string votationId);
+    Task MeetingVotationStopped(string meetingId, string propositionId, string votationId, DateTime stoppedAtUtc);
+
 }
 
 public class MeetingBroadcaster : IMeetingBroadcaster
@@ -25,7 +29,7 @@ public class MeetingBroadcaster : IMeetingBroadcaster
 
     public Task MeetingStateChanged(string meetingId, int newState)
     {
-        var dto = new MeetingStateChangedDto(meetingId, newState);
+        var dto = new MeetingStateChangedDto(meetingId, newState); 
         try
         {
             _logger.LogInformation("Broadcasting MeetingStateChanged for meeting {MeetingId} state={State}", meetingId, newState);
@@ -83,4 +87,29 @@ public class MeetingBroadcaster : IMeetingBroadcaster
     public Task AdminNotice(string meetingId, string message)
         => _hub.Clients.Group(MeetingHub.AdminsGroup)
             .AdminNotice(new AdminNoticeDto(meetingId, message, DateTime.UtcNow));
+    
+    
+    public Task MeetingPropositionOpened(string meetingId, string propositionId, string votationId)
+    {
+        var dto = new PropositionOpenedDto(meetingId, propositionId, votationId);
+        _logger.LogInformation("Broadcasting PropositionOpened {MeetingId} prop={Prop} votation={Votation}",
+            meetingId, propositionId, votationId);
+
+        return Task.WhenAll(
+            _hub.Clients.Group(MeetingHub.MeetingGroup(meetingId)).PropositionVoteOpened(dto),
+            _hub.Clients.Group(MeetingHub.AdminsGroup).PropositionVoteOpened(dto)
+        );
+    }
+    
+    public Task MeetingVotationStopped(string meetingId, string propositionId, string votationId, DateTime stoppedAtUtc)
+    {
+        var dto = new VotationStoppedDto(meetingId, propositionId, votationId, stoppedAtUtc);
+        _logger.LogInformation("Broadcasting VotationStopped {MeetingId} prop={Prop} votation={Votation}",
+            meetingId, propositionId, votationId);
+
+        return Task.WhenAll(
+            _hub.Clients.Group(MeetingHub.MeetingGroup(meetingId)).PropositionVoteStopped(dto),
+            _hub.Clients.Group(MeetingHub.AdminsGroup).PropositionVoteStopped(dto)
+        );
+    }
 }

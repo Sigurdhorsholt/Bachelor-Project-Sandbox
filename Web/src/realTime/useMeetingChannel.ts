@@ -280,6 +280,26 @@ export function useMeetingChannel(meetingId?: string, onStateChanged?: () => voi
                 // ignore
             }
         });
+
+        type PropositionOpenedDto = { meetingId: string; propositionId: string; votationId: string };
+        type VotationStoppedDto = { meetingId: string; propositionId: string; votationId: string; stoppedAtUtc: string };
+
+
+        connection.on("PropositionOpened", (dto: PropositionOpenedDto) => {
+            if (dto.meetingId !== meetingId) {
+                return;
+            }
+            // Option A: Just invalidate the meeting/votation-related caches
+            dispatch(meetingsApi.util.invalidateTags([{ type: "Meeting", id: meetingId }]));
+        });
+
+        connection.on("VotationStopped", (dto: VotationStoppedDto) => {
+            if (dto.meetingId !== meetingId) {
+                return;
+            }
+            // Close the voting pane
+            dispatch(meetingsApi.util.invalidateTags([{ type: "Meeting", id: meetingId }]));
+        });
     }
 
 }
