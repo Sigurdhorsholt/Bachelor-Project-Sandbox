@@ -42,6 +42,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<Ballot>().ToTable("ballots");
         b.Entity<Vote>().ToTable("votes");
         b.Entity<AuditableEvent>().ToTable("auditableevents");
+        b.Entity<Votation>().ToTable("votation");
 
         // indexes/uniques you rely on
         b.Entity<User>().HasIndex(u => u.Email).IsUnique();
@@ -119,17 +120,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .WithOne(v => v.AuditableEvent)
             .HasForeignKey<AuditableEvent>(a => a.VoteId);
         
-        b.Entity<Votation>().ToTable("votation");
-
         b.Entity<Votation>()
             .HasOne(v => v.Meeting)
-            .WithMany()
-            .HasForeignKey(v => v.MeetingId);
+            .WithMany(m => m.Votations)
+            .HasForeignKey(v => v.MeetingId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         b.Entity<Votation>()
             .HasOne(v => v.Proposition)
-            .WithMany()
-            .HasForeignKey(v => v.PropositionId);
+            .WithMany(p => p.Votations)
+            .HasForeignKey(v => v.PropositionId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         b.Entity<Votation>().Property(v => v.Open).HasDefaultValue(false);
         b.Entity<Votation>().Property(v => v.Overwritten).HasDefaultValue(false);

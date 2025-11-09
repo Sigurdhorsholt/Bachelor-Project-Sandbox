@@ -32,6 +32,7 @@ import {
     useStopMeetingMutation
 } from "../../../../Redux/meetingsApi.ts";
 import { useMeetingChannel } from "../../../../realTime/useMeetingChannel.ts";
+import {useStartVoteAndCreateVotationMutation, useStopVotationMutation} from "../../../../Redux/votationApi.tsx";
 
 export default function MeetingLiveAdminCore({ meeting }: { meeting: any }) {
     const navigate = useNavigate();
@@ -50,6 +51,9 @@ export default function MeetingLiveAdminCore({ meeting }: { meeting: any }) {
 
     const [startMeeting] = useStartMeetingMutation();
     const [stopMeeting] = useStopMeetingMutation();
+    
+    const [startVoteAndCreateVotation] = useStartVoteAndCreateVotationMutation();
+    const [stopVotation] = useStopVotationMutation();
 
     useEffect(() => {
         setSelectedAgendaIndex(-1);
@@ -67,11 +71,15 @@ export default function MeetingLiveAdminCore({ meeting }: { meeting: any }) {
     const goBack = () => navigate(-1);
 
     const handleOpenVote = () => {
-        // TODO: implement opening a vote (server call / signalR)
+        if (selectedProposition) {
+            startVoteAndCreateVotation({ meetingId: meeting.id, propositionId: selectedProposition.id });
+        }
     };
 
     const handleCloseVote = () => {
-        // TODO: implement closing a vote (server call /signalR)
+        if (selectedProposition) {
+            stopVotation(selectedProposition.id);
+        }
     };
 
     // Navigate propositions within current agenda

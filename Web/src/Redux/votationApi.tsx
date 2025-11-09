@@ -42,11 +42,19 @@ export const votationApi = api.injectEndpoints({
 
         // GET /api/votation/{votationId}
         getVotation: b.query<VotationDto, string>({
-            query: (votationId) => `/votation/${votationId}`,
+            query: (votationId) => `/votation/openVotes/${votationId}`,
             transformResponse: (raw: any) => toVotation(raw),
-            providesTags: (result) => (result ? [{ type: "Meeting" as const, id: result.meetingId }] : []),
+            providesTags: (result, _err) => (result ? [{ type: "Meeting" as const, id: result.meetingId }] : []),
         }),
+
+        // GET /api/votation/open-votes/{meetingId}
+        getOpenVotationsByMeetingId: b.query<VotationDto[], string>({
+            query: (meetingId) => `/votation/open-votes/${meetingId}`,
+            transformResponse: (raw: any) => (Array.isArray(raw) ? raw.map(toVotation) : []),
+            providesTags: (result, _err, meetingId) => [{ type: "Meeting" as const, id: meetingId }],
+        }),
+
     }),
 });
 
-export const { useStartVoteAndCreateVotationMutation, useStopVotationMutation, useGetVotationQuery } = votationApi;
+export const { useStartVoteAndCreateVotationMutation, useStopVotationMutation, useGetVotationQuery, useGetOpenVotationsByMeetingIdQuery } = votationApi;

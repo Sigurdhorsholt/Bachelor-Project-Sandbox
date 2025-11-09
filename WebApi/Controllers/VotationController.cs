@@ -122,5 +122,19 @@ public class VotationController : ControllerBase
         if (votation == null) return NotFound();
         return Ok(votation);
     }
+
+    [HttpGet("open-votes/{meetingId:guid}")]
+    public async Task<IActionResult> GetOpenVotationsForMeeting(Guid meetingId)
+    {
+        var meeting = await _db.Meetings.FindAsync(meetingId);
+        if (meeting == null) return NotFound("Meeting not found.");
+        
+        
+        var openVotations = await _db.Votations
+            .Where(v => v.MeetingId == meetingId && v.Open)
+            .ToListAsync();
+
+        return Ok(openVotations);
+    }
     
 }
