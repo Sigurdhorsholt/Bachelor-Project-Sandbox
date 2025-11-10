@@ -25,7 +25,7 @@ type Props = {
     onRequestRename?: (itemId: string, currentTitle: string) => void;
 };
 
-export default function AgendaItemCard({
+export default function AgendaItemCardAdminView({
                                            meetingId, itemId, index, title, description, locked,
                                            onRequestRename,
                                        }: Props) {

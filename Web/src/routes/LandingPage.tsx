@@ -14,7 +14,7 @@ import {
     Box,
     Paper,
     InputAdornment,
-    Link as MUILink
+    Link as MUILink, CircularProgress
 } from "@mui/material";
 import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
@@ -30,6 +30,7 @@ export default function LandingPage() {
     const [adminUser, setAdminUser] = useState("");
     const [adminPass, setAdminPass] = useState("");
     const [login, {isLoading, error}] = useLoginMutation();
+    
     const dispatch = useDispatch();
     const nav = useNavigate();
 
@@ -43,15 +44,16 @@ export default function LandingPage() {
 
     const handleLogin = async () => {
         try {
+
             const r = await login({email: adminUser, password: adminPass}).unwrap();
             dispatch(setAuth({
-                accessToken: r.accessToken, 
+                accessToken: r.accessToken,
                 email: r.email,
                 roles: r.roles,
                 refreshToken: null, // add later if you implement refresh
             }));
             nav("/admin");
-        } catch (error){
+        } catch (error) {
             console.error('Login failed', error);
         }
     }
@@ -61,7 +63,7 @@ export default function LandingPage() {
             nav(`/meeting/${meetingId}/login`);
         }
     };
-    
+
 
     return (
         <div className="min-h-screen flex flex-col bg-gradient-to-b from-white to-slate-50 text-slate-900">
@@ -218,6 +220,11 @@ export default function LandingPage() {
                     <Button onClick={handleCloseLogin} variant="text">Annuller</Button>
                     <Button onClick={handleLogin} variant="contained" disableElevation>
                         Log ind
+                        {isLoading &&
+                            <Box sx={{display: 'flex'}}>
+                                <CircularProgress/>
+                            </Box>
+                        }
                     </Button>
                 </DialogActions>
             </Dialog>

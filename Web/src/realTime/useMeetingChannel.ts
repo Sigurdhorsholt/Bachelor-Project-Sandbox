@@ -10,6 +10,8 @@ import { getStoredAdminAccessToken } from "../services/token";
 /** ---- Server → Client DTOs ---- */
 type MeetingStateChangedDto = { meetingId: string; started: number };
 type MeetingStartedDto = { meetingId: string };
+type PropositionOpenedDto = { meetingId: string; propositionId: string; votationId: string };
+type VotationStoppedDto = { meetingId: string; propositionId: string; votationId: string; stoppedAtUtc: string };
 
 /**
  * Subscribes UI to live updates for a specific meeting.
@@ -280,10 +282,7 @@ export function useMeetingChannel(meetingId?: string, onStateChanged?: () => voi
                 // ignore
             }
         });
-
-        type PropositionOpenedDto = { meetingId: string; propositionId: string; votationId: string };
-        type VotationStoppedDto = { meetingId: string; propositionId: string; votationId: string; stoppedAtUtc: string };
-
+        
 
         connection.on("PropositionOpened", (dto: PropositionOpenedDto) => {
             if (dto.meetingId !== meetingId) {

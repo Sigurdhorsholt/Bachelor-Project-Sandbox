@@ -36,7 +36,7 @@ public class MeetingsController : ControllerBase
 
     // GET: /api/meetings/{id}
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(Guid id)
+    public async Task<IActionResult> GetMeetingFullById(Guid id)
     {
         var m = await _db.Meetings
             .Include(x => x.AgendaItems).ThenInclude(a => a.Propositions)
@@ -58,7 +58,15 @@ public class MeetingsController : ControllerBase
                 a.Id,
                 a.Title,
                 a.Description,
-                Propositions = a.Propositions.Select(p => new { p.Id, Question = p.Question, VoteType = p.VoteType }).ToList()
+                Propositions = a.Propositions.Select(p => new
+                {
+                    p.Id,
+                    Question = p.Question,
+                    VoteType = p.VoteType,
+                    VoteOptions = p.Options
+                        .Select(o => new { o.Id, o.Label })
+                        .ToList()
+                }).ToList()
             }).ToList()
         });
     }

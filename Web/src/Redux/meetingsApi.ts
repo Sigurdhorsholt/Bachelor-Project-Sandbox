@@ -3,7 +3,7 @@ import type {
     MeetingStatus, MeetingDto, MeetingListItemDto, MeetingStatusName, CreateMeetingPayload, MeetingFullDto,
     PublicMeetingMeta
 } from "../domain/meetings";
-import type { AgendaItemDto } from "../domain/agenda";
+import type {AgendaItemDto, AgendaItemFull} from "../domain/agenda";
 import type { PropositionDto } from "../domain/propositions";
 import type { VoteOptionDto } from "../domain/voteOptions";
 import type { AccessStateDto } from "../domain/access";
@@ -61,25 +61,29 @@ export const meetingsApi = api.injectEndpoints({
                 { type: "Meeting", id: meetingId },
                 { type: "Agenda", id: meetingId },
             ],
-            transformResponse: (raw: any) => ({
+            transformResponse: (raw: any): MeetingFullDto => ({
                 id: raw.id,
-                divisionId: raw.divisionId ?? raw.DivisionId ?? "", // may be omitted
+                divisionId: raw.divisionId ?? raw.DivisionId ?? "",
                 title: raw.title,
                 startsAtUtc: raw.startsAtUtc ?? raw.StartsAtUtc,
                 status: normalizeStatus(raw.status ?? raw.Status),
                 meetingCode: raw.meetingCode ?? raw.MeetingCode ?? undefined,
                 started: raw.started ?? raw.Started ?? 0,
-                agenda: (raw.agenda ?? raw.Agenda ?? []).map((a: any) => ({
-                    id: a.id,
-                    title: a.title,
+                agenda: (raw.agenda ?? raw.Agenda ?? []).map((a: any): AgendaItemFull => ({
+                    id: a.id ?? a.Id,
+                    title: a.title ?? a.Title,
                     description: a.description ?? a.Description ?? null,
-                    propositions: (a.propositions ?? a.Propositions ?? []).map((p: any) => ({
-                        id: p.id,
-                        question: p.question ?? p.Question ?? p.title ?? p.Title,
+                    propositions: (a.propositions ?? a.Propositions ?? []).map((p: any): PropositionDto => ({
+                        id: p.id ?? p.Id,
+                        question: p.question ?? p.Question ?? p.title ?? p.Title ?? "",
                         voteType: p.voteType ?? p.VoteType ?? "YesNoBlank",
-                    }))
-                }))
-            }) as MeetingFullDto,
+                        voteOptions: (p.voteOptions ?? p.VoteOptions ?? []).map((o: any): VoteOptionDto => ({
+                            id: o.id ?? o.Id,
+                            label: o.label ?? o.Label ?? String(o.id ?? o.Id ?? ""),
+                        })),
+                    })),
+                })),
+            }),
         }),
 
         getMeetingPublic: b.query<PublicMeetingMeta, string>({
@@ -320,20 +324,30 @@ export const meetingsApi = api.injectEndpoints({
 });
 
 const statusNames = ["Draft","Scheduled","Published","Finished"] as const;
-function normalizeStatus(raw: any): string {
-  if (raw == null) return "Draft";
-  if (typeof raw === "string") {
-    // if already valid name, return
-    if (statusNames.includes(raw as any)) return raw;
-    // attempt to parse numeric string
-    const num = Number(raw);
-    if (!Number.isNaN(num) && statusNames[num]) return statusNames[num];
-    return "Draft";
-  }
-  if (typeof raw === "number") {
-    return statusNames[raw] ?? "Draft";
-  }
-  return "Draft";
+type StatusName = typeof statusNames[number];
+
+function normalizeStatus(raw: any): StatusName {
+    switch (typeof raw) {
+        case "string": {
+            // exact name ("Draft", "Scheduled"...)
+            if (statusNames.includes(raw as StatusName)) return raw as StatusName;
+
+            // numeric string?
+            const num = Number(raw);
+            if (!Number.isNaN(num)) {
+                return statusNames[num] ?? "Draft";
+            }
+
+            return "Draft";
+        }
+
+        case "number": {
+            return statusNames[raw] ?? "Draft";
+        }
+
+        default:
+            return "Draft";
+    }
 }
 
 function toPascalPatch(patch: Record<string, any>): Record<string, any> {

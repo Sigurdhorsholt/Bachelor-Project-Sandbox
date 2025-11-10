@@ -31,7 +31,7 @@ import {
     useClearTicketsMutation,
     useReplaceTicketsMutation,
 } from "../../../../Redux/meetingsApi"; // fixed relative path
-import AgendaItemCard from "./components/AgendaItemCard.tsx";
+import AgendaItemCard from "./components/AgendaItemCardAdminView.tsx";
 
 
 const pad = (n: number) => String(n).padStart(2, "0");

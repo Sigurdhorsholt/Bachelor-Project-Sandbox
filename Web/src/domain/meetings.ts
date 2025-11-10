@@ -1,5 +1,8 @@
 // src/domain/meetings.ts
 // Meeting status values (numeric mapping to backend enum) - erasable safe
+import type {PropositionDto} from "./propositions.ts";
+import type {AgendaItemFull} from "./agenda.ts";
+
 export const MeetingStatusValues = {
   Draft: 0,
   Scheduled: 1,
@@ -37,14 +40,20 @@ export type CreateMeetingPayload = {
   status: MeetingStatusName;
 };
 
+
+/**
 export type MeetingFullDto = MeetingDto & {
   agenda: {
     id: string;
     title: string;
     description?: string | null;
-    propositions: { id: string; question: string; voteType: string }[];
+    propositions: PropositionDto[];
   }[];
 };
+    */
+
+export type MeetingFullDto = MeetingDto & { agenda: AgendaItemFull[] };
+
 
 export type PublicMeetingMeta = {
     id: string;
