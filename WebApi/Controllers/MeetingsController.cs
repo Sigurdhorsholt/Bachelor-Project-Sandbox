@@ -39,7 +39,9 @@ public class MeetingsController : ControllerBase
     public async Task<IActionResult> GetMeetingFullById(Guid id)
     {
         var m = await _db.Meetings
-            .Include(x => x.AgendaItems).ThenInclude(a => a.Propositions)
+            .Include(x => x.AgendaItems)
+                .ThenInclude(a => a.Propositions)
+                    .ThenInclude(p => p.Votations)
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id);
         if (m is null) return NotFound();
@@ -63,6 +65,8 @@ public class MeetingsController : ControllerBase
                     p.Id,
                     Question = p.Question,
                     VoteType = p.VoteType,
+                    Votations = p.Votations,
+                    IsOpen = p.Votations.Any(v => v.Open),
                     VoteOptions = p.Options
                         .Select(o => new { o.Id, o.Label })
                         .ToList()
