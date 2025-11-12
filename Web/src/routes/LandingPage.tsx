@@ -25,10 +25,10 @@ import {useDispatch} from "react-redux";
 import {useNavigate} from "react-router-dom";
 
 export default function LandingPage() {
-    const [meetingId, setMeetingId] = useState("");
+    const [meetingId, setMeetingId] = useState("XMJ5ZZ");
     const [loginOpen, setLoginOpen] = useState(false);
-    const [adminUser, setAdminUser] = useState("");
-    const [adminPass, setAdminPass] = useState("");
+    const [adminUser, setAdminUser] = useState("admin@example.com");
+    const [adminPass, setAdminPass] = useState("admin");
     const [login, {isLoading, error}] = useLoginMutation();
     
     const dispatch = useDispatch();
