@@ -32,7 +32,7 @@ public class AuthController : ControllerBase
 
     [HttpPost("login")]
     [AllowAnonymous]
-    public async Task<IActionResult> Login([FromBody] LoginRequest req, CancellationToken ct)
+    public async Task<IActionResult> AdminLogin([FromBody] LoginRequest req, CancellationToken ct)
     {
         var user = await _db.Users
             .Include(u => u.Roles)
@@ -50,7 +50,7 @@ public class AuthController : ControllerBase
     
    
    [HttpGet("me")]
-   public async Task<IActionResult> Me()
+   public async Task<IActionResult> AminMe()
    {
        var email = User.Identity?.Name ?? "";
        var roles = User.FindAll(ClaimTypes.Role).Select(c => c.Value).ToArray();

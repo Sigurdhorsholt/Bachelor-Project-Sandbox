@@ -32,7 +32,7 @@ import {
     useStopMeetingMutation
 } from "../../../../Redux/meetingsApi.ts";
 import { useMeetingChannel } from "../../../../realTime/useMeetingChannel.ts";
-import {useStartVoteAndCreateVotationMutation, useStopVotationMutation} from "../../../../Redux/votationApi.tsx";
+import {useStartVoteAndCreateVotationMutation, useStopVotationMutation} from "../../../../Redux/votationApi.ts";
 
 export default function MeetingLiveAdminCore({ meeting }: { meeting: any }) {
     const navigate = useNavigate();

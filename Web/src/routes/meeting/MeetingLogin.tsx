@@ -25,7 +25,10 @@ export default function MeetingLogin() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!meetingCode || !accessCode.trim()) return;
+        
+        if (!meetingCode || !accessCode.trim()) {
+            return
+        }
 
         try {
             const result = await attendeeLogin({

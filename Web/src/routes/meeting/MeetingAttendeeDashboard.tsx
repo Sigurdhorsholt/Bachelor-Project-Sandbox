@@ -1,39 +1,62 @@
 // routes/meeting/MeetingAttendeeDashboard.tsx
-import React, {useMemo} from "react";
-import {useParams} from "react-router-dom";
+import React, {useEffect, useMemo} from "react";
+import {useNavigate, useParams} from "react-router-dom";
 import {Box, Card, CardContent, Chip, Divider, LinearProgress, Typography} from "@mui/material";
 import {useMeetingChannel} from "../../realTime/useMeetingChannel.ts";
 import {useGetMeetingFullQuery} from "../../Redux/meetingsApi.ts";
 import {AgendaItemCard} from "../admin/components/shared/AgendaItemCard.tsx";
 import type {MeetingFullDto, MeetingStatusName} from "../../domain/meetings.ts";
+import TopBar from "../admin/components/TopBar.tsx";
+import {clearAuth} from "../../Redux/auth/authSlice.ts";
+import {useDispatch} from "react-redux";
+import {clearAttendeeAuth} from "../../Redux/attendeeAuth/attendeeAuthSlice.ts";
+import {useGetOpenVotationsByMeetingIdQuery} from "../../Redux/votationApi.ts";
 
 
 /* ===================== Component ===================== */
 
 export const MeetingAttendeeDashboard: React.FC = () => {
+    console.log("Rendering MeetingAttendeeDashboard");
     const meetingId = useRouteMeetingId();
     useMeetingChannel(meetingId); // invalidates/refetches on push
+    const dispatch = useDispatch();
+    const navigate = useNavigate();
 
-    const {data, isLoading, isFetching, isError} = useGetMeetingFullQuery(meetingId, {
+    const {data: meetingData, isLoading: meetingIsLoading, isFetching: meetingIsFetching, isError: meetingIsError} = useGetMeetingFullQuery(meetingId, {
         skip: meetingId.length === 0,
     });
-
-    const hasStarted = useMemo(() => isMeetingStarted(data), [data]);
-    const title = useMemo(() => getTitle(isLoading, data), [isLoading, data]);
-    const headline = useMemo(() => getHeadline(isLoading, isError, hasStarted), [isLoading, isError, hasStarted]);
+    
+    const {data: votationData, isLoading: votationIsLoading, isFetching: votationIsFetching, isError: votationIsError} = useGetOpenVotationsByMeetingIdQuery(meetingId, {
+        skip: meetingId.length === 0,
+    });
+    
+    const hasStarted = useMemo(() => isMeetingStarted(meetingData), [meetingData]);
+    const title = useMemo(() => getTitle(meetingIsLoading, meetingData), [meetingIsLoading, meetingData]);
+    const headline = useMemo(() => getHeadline(meetingIsLoading, meetingIsError, hasStarted), [meetingIsLoading, meetingIsError, hasStarted]);
     const subline = useMemo(
-        () => getSubline(isLoading, isError, hasStarted, data?.startsAtUtc),
-        [isLoading, isError, hasStarted, data?.startsAtUtc]
+        () => getSubline(meetingIsLoading, meetingIsError, hasStarted, meetingData?.startsAtUtc),
+        [meetingIsLoading, meetingIsError, hasStarted, meetingData?.startsAtUtc]
     );
+
+    const logout = () => {
+        console.log("logging out as attendee")
+        dispatch(clearAttendeeAuth());
+        navigate("/");
+    };
+    
+    useEffect(() => {
+        console.log("votationData", votationData)
+    }, [votationData]);
+
 
     return (
         <Box
             className="bg-gradient-to-b from-white to-slate-50"
             sx={{minHeight: "100vh", display: "grid", placeItems: "center", px: 2, py: {xs: 2, sm: 4}}}
         >
-            <Card elevation={1} className="rounded-2xl shadow-sm border border-slate-100 w-full max-w-2xl">
-                {isFetching ? <LinearProgress/> : null}
+            <TopBar onMenuClick={() => {}} onLogout={logout} logoutButtonText={"Forlad Møde"}/>
 
+         
 
                 <Box className="text-center my-2">
                     <Chip
@@ -70,12 +93,12 @@ export const MeetingAttendeeDashboard: React.FC = () => {
 
                     {/* Agenda */}
                     <Box className="space-y-4">
-                        {isError ? (
+                        {meetingIsError ? (
                             <Typography color="error">We couldn’t load this meeting.</Typography>
-                        ) : isLoading ? (
+                        ) : meetingIsLoading ? (
                             <SkeletonAgenda/>
-                        ) : data?.agenda?.length ? (
-                            data.agenda.map((item) => (
+                        ) : meetingData?.agenda?.length ? (
+                            meetingData.agenda.map((item) => (
                                 <AgendaItemCard key={item.id} meetingId={meetingId} agendaItem={item}/>
                             ))
                         ) : (
@@ -85,7 +108,6 @@ export const MeetingAttendeeDashboard: React.FC = () => {
                         )}
                     </Box>
                 </CardContent>
-            </Card>
         </Box>
     );
 };

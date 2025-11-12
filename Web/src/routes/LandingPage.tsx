@@ -59,6 +59,7 @@ export default function LandingPage() {
     }
 
     const handleGoToMeeting = async () => {
+        console.log("Going to meeting:", meetingId);
         if (meetingId.trim() !== "") {
             nav(`/meeting/${meetingId}/login`);
         }
