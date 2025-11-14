@@ -1,10 +1,11 @@
 ﻿// components/attendee/PropositionCard.tsx
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Box, Chip, Paper, Typography, Collapse, IconButton } from "@mui/material";
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import type {PropositionDto} from "../../../../domain/propositions.ts";
 import {VotePanel} from "../../../meeting/VotePanel.tsx";
+import { useGetOpenVotationsByMeetingIdQuery } from "../../../../Redux/votationApi.ts";
 
 
 type Props = {
@@ -13,10 +14,26 @@ type Props = {
 };
 
 export const PropositionCard: React.FC<Props> = ({ meetingId, proposition }) => {
-    // For now, all propositions are CLOSED until SignalR says "open".
-    // Later, replace with real state from hub message.
-    const isOpen = useMemo(() => false, []);
+    // Fetch open votations for this meeting
+    const { data: openVotations } = useGetOpenVotationsByMeetingIdQuery(meetingId);
+    
+    // Check if this proposition has an open votation
+    const openVotation = useMemo(() => 
+        openVotations?.find(v => v.propositionId === proposition.id && v.open),
+        [openVotations, proposition.id]
+    );
+    
+    const isOpen = Boolean(openVotation);
     const [collapsed, setCollapsed] = useState(!isOpen);
+
+    // Auto-expand when vote opens, auto-collapse when vote closes
+    useEffect(() => {
+        if (isOpen) {
+            setCollapsed(false);
+        } else {
+            setCollapsed(true);
+        }
+    }, [isOpen]);
 
     const handleToggle = () => setCollapsed((prev) => !prev);
 
@@ -46,6 +63,7 @@ export const PropositionCard: React.FC<Props> = ({ meetingId, proposition }) => 
                     <VotePanel
                         meetingId={meetingId}
                         proposition={proposition}
+                        votationId={openVotation?.id}
                         isOpen={isOpen}
                     />
                 </Collapse>

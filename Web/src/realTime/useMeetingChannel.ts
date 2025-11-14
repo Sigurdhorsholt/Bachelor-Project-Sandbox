@@ -284,20 +284,44 @@ export function useMeetingChannel(meetingId?: string, onStateChanged?: () => voi
         });
         
 
-        connection.on("PropositionOpened", (dto: PropositionOpenedDto) => {
-            if (dto.meetingId !== meetingId) {
+        connection.on("PropositionVoteOpened", (dto: PropositionOpenedDto) => {
+            console.debug("[useMeetingChannel] received PropositionVoteOpened", dto);
+            if (dto == null) {
                 return;
             }
-            // Option A: Just invalidate the meeting/votation-related caches
-            dispatch(meetingsApi.util.invalidateTags([{ type: "Meeting", id: meetingId }]));
+
+            const dtoMeetingId = dto.meetingId ?? (dto as any).MeetingId;
+            const dtoPropositionId = dto.propositionId ?? (dto as any).PropositionId;
+            
+            if (dtoMeetingId !== meetingId) {
+                return;
+            }
+            
+            // Invalidate both Meeting and Votations tags to refetch votations
+            dispatch(meetingsApi.util.invalidateTags([
+                { type: "Meeting", id: meetingId },
+                { type: "Votations", id: dtoPropositionId }
+            ]));
         });
 
-        connection.on("VotationStopped", (dto: VotationStoppedDto) => {
-            if (dto.meetingId !== meetingId) {
+        connection.on("PropositionVoteStopped", (dto: VotationStoppedDto) => {
+            console.debug("[useMeetingChannel] received PropositionVoteStopped", dto);
+            if (dto == null) {
                 return;
             }
-            // Close the voting pane
-            dispatch(meetingsApi.util.invalidateTags([{ type: "Meeting", id: meetingId }]));
+
+            const dtoMeetingId = dto.meetingId ?? (dto as any).MeetingId;
+            const dtoPropositionId = dto.propositionId ?? (dto as any).PropositionId;
+            
+            if (dtoMeetingId !== meetingId) {
+                return;
+            }
+            
+            // Invalidate both Meeting and Votations tags to refetch votations
+            dispatch(meetingsApi.util.invalidateTags([
+                { type: "Meeting", id: meetingId },
+                { type: "Votations", id: dtoPropositionId }
+            ]));
         });
     }
 

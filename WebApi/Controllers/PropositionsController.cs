@@ -19,19 +19,65 @@ public class PropositionsController : ControllerBase
     private Task<bool> AgendaItemExists(Guid meetingId, Guid itemId) =>
         _db.AgendaItems.AnyAsync(a => a.Id == itemId && a.MeetingId == meetingId);
 
-    // GET
+    // GET: /api/meetings/{meetingId}/agenda/{itemId}/propositions
+    // Query params: includeVoteOptions=true, includeVotations=true
     [HttpGet]
-    public async Task<IActionResult> Get(Guid meetingId, Guid itemId)
+    public async Task<IActionResult> Get(Guid meetingId, Guid itemId, 
+        [FromQuery] bool includeVoteOptions = false, 
+        [FromQuery] bool includeVotations = false)
     {
         if (!await AgendaItemExists(meetingId, itemId)) return NotFound("Agenda item not found.");
 
-        var list = await _db.Propositions
+        if (!includeVoteOptions && !includeVotations)
+        {
+            var list = await _db.Propositions
+                .Where(p => p.AgendaItemId == itemId)
+                .AsNoTracking()
+                .Select(p => new { p.Id, p.Question, p.VoteType })
+                .ToListAsync();
+
+            return Ok(list);
+        }
+
+        var query = _db.Propositions
             .Where(p => p.AgendaItemId == itemId)
-            .AsNoTracking()
-            .Select(p => new { p.Id, p.Question, p.VoteType })
+            .AsNoTracking();
+
+        if (includeVoteOptions)
+            query = query.Include(p => p.Options);
+
+        if (includeVotations)
+            query = query.Include(p => p.Votations.Where(v => v.MeetingId == meetingId));
+
+        var propositions = await query
+            .Select(p => new
+            {
+                p.Id,
+                p.Question,
+                p.VoteType,
+                VoteOptions = includeVoteOptions 
+                    ? p.Options.Select(o => new { o.Id, o.Label }).ToList()
+                    : null,
+                Votations = includeVotations
+                    ? p.Votations
+                        .Where(v => v.MeetingId == meetingId)
+                        .Select(v => new
+                        {
+                            v.Id,
+                            v.MeetingId,
+                            v.PropositionId,
+                            v.StartedAtUtc,
+                            v.EndedAtUtc,
+                            v.Open,
+                            v.Overwritten
+                        })
+                        .ToList()
+                    : null,
+                IsOpen = includeVotations && p.Votations.Any(v => v.Open)
+            })
             .ToListAsync();
 
-        return Ok(list);
+        return Ok(propositions);
     }
 
     public record CreatePropositionRequest(string Question, string VoteType);

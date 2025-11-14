@@ -1,4 +1,4 @@
-﻿using Application.Domain.Entities;
+﻿﻿using Application.Domain.Entities;
 using Application.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +11,7 @@ namespace WebApi.Controllers;
 [Route("api/votation/")]
 public class VotationController : ControllerBase
 {
-    private readonly AppDbContext _db;
+    private AppDbContext _db;
     private readonly IMeetingBroadcaster _broadcast;
 
     public VotationController(
@@ -89,18 +89,14 @@ public class VotationController : ControllerBase
     public async Task<IActionResult> StopVotation(Guid propositionId)
     {
         var votation = await _db.Votations
+            .AsTracking()  // ← This is critical for EF Core to track changes!
             .Where(v => v.PropositionId == propositionId && v.Open)
             .OrderByDescending(v => v.StartedAtUtc)
             .FirstOrDefaultAsync();
         
         if (votation == null)
         {
-            return NotFound("Votation not found.");
-        }
-
-        if (!votation.Open)
-        {
-            return Ok(votation);
+            return NotFound("No open votation found for this proposition.");
         }
 
         votation.Open = false;
@@ -139,6 +135,34 @@ public class VotationController : ControllerBase
             .ToListAsync();
 
         return Ok(openVotations);
+    }
+
+    // GET: /api/votation/by-proposition/{meetingId}/{propositionId}
+    [HttpGet("by-proposition/{meetingId:guid}/{propositionId:guid}")]
+    public async Task<IActionResult> GetVotationsByProposition(Guid meetingId, Guid propositionId)
+    {
+        var meeting = await _db.Meetings.FindAsync(meetingId);
+        if (meeting == null) return NotFound("Meeting not found.");
+
+        var proposition = await _db.Propositions.FindAsync(propositionId);
+        if (proposition == null) return NotFound("Proposition not found.");
+
+        var votations = await _db.Votations
+            .Where(v => v.MeetingId == meetingId && v.PropositionId == propositionId)
+            .OrderByDescending(v => v.StartedAtUtc)
+            .Select(v => new
+            {
+                v.Id,
+                v.MeetingId,
+                v.PropositionId,
+                v.StartedAtUtc,
+                v.EndedAtUtc,
+                v.Open,
+                v.Overwritten
+            })
+            .ToListAsync();
+
+        return Ok(votations);
     }
     
 }

@@ -40,21 +40,6 @@ export type CreateMeetingPayload = {
   status: MeetingStatusName;
 };
 
-
-/**
-export type MeetingFullDto = MeetingDto & {
-  agenda: {
-    id: string;
-    title: string;
-    description?: string | null;
-    propositions: PropositionDto[];
-  }[];
-};
-    */
-
-export type MeetingFullDto = MeetingDto & { agenda: AgendaItemFull[] };
-
-
 export type PublicMeetingMeta = {
     id: string;
     title: string;

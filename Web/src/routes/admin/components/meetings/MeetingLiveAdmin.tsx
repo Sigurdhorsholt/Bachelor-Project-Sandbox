@@ -1,16 +1,19 @@
 ﻿import React from "react";
 import { useParams } from "react-router-dom";
-import { useGetMeetingFullQuery } from "../../../../Redux/meetingsApi.ts";
+import { useGetMeetingQuery, useGetAgendaWithPropositionsQuery } from "../../../../Redux/meetingsApi.ts";
 import FullScreenLoader from "../shared/FullScreenLoader.tsx";
 import MeetingLiveAdminCore from "./MeetingLiveAdminCore.tsx";
 
 export default function MeetingLiveAdmin() {
     const { id } = useParams() as { id?: string };
-    const { data: meeting } = useGetMeetingFullQuery(id || "", { skip: !id });
+    const meetingId = id || "";
+    
+    const { data: meeting, isLoading: meetingLoading } = useGetMeetingQuery(meetingId, { skip: !id });
+    const { data: agenda, isLoading: agendaLoading } = useGetAgendaWithPropositionsQuery(meetingId, { skip: !id });
 
-    if (!meeting) {
+    if (meetingLoading || agendaLoading || !meeting || !agenda) {
         return <FullScreenLoader message={"Loading meeting data"} submessage={"Redirecting when meeting is ready"}/>;
     }
 
-    return <MeetingLiveAdminCore meeting={meeting} />;
+    return <MeetingLiveAdminCore meeting={meeting} agenda={agenda} />;
 }

@@ -3,15 +3,14 @@ import React, {useEffect, useMemo} from "react";
 import {useNavigate, useParams} from "react-router-dom";
 import {Box, Card, CardContent, Chip, Divider, LinearProgress, Typography} from "@mui/material";
 import {useMeetingChannel} from "../../realTime/useMeetingChannel.ts";
-import {useGetMeetingFullQuery} from "../../Redux/meetingsApi.ts";
 import {AgendaItemCard} from "../admin/components/shared/AgendaItemCard.tsx";
-import type {MeetingFullDto, MeetingStatusName} from "../../domain/meetings.ts";
 import TopBar from "../admin/components/TopBar.tsx";
 import {clearAuth} from "../../Redux/auth/authSlice.ts";
 import {useDispatch} from "react-redux";
 import {clearAttendeeAuth} from "../../Redux/attendeeAuth/attendeeAuthSlice.ts";
 import {useGetOpenVotationsByMeetingIdQuery} from "../../Redux/votationApi.ts";
-
+import {useGetAgendaWithPropositionsQuery, useGetMeetingQuery} from "../../Redux/meetingsApi.ts";
+import type {MeetingDto, MeetingStatusName} from "../../domain/meetings.ts";
 
 /* ===================== Component ===================== */
 
@@ -22,10 +21,16 @@ export const MeetingAttendeeDashboard: React.FC = () => {
     const dispatch = useDispatch();
     const navigate = useNavigate();
 
-    const {data: meetingData, isLoading: meetingIsLoading, isFetching: meetingIsFetching, isError: meetingIsError} = useGetMeetingFullQuery(meetingId, {
-        skip: meetingId.length === 0,
-    });
-    
+    //const {data: meetingData, isLoading: meetingIsLoading, isFetching: meetingIsFetching, isError: meetingIsError} = useGetMeetingFullQuery(meetingId, {
+    //    skip: meetingId.length === 0,
+    //});
+
+    const {data: meetingData, isLoading: meetingIsLoading, isFetching: meetingIsFetching, isError: meetingIsError}  = useGetMeetingQuery(meetingId);
+    const { data: agendaItems } = useGetAgendaWithPropositionsQuery(meetingId);
+
+
+
+
     const {data: votationData, isLoading: votationIsLoading, isFetching: votationIsFetching, isError: votationIsError} = useGetOpenVotationsByMeetingIdQuery(meetingId, {
         skip: meetingId.length === 0,
     });
@@ -97,8 +102,8 @@ export const MeetingAttendeeDashboard: React.FC = () => {
                             <Typography color="error">We couldn’t load this meeting.</Typography>
                         ) : meetingIsLoading ? (
                             <SkeletonAgenda/>
-                        ) : meetingData?.agenda?.length ? (
-                            meetingData.agenda.map((item) => (
+                        ) : agendaItems?.length ? (
+                            agendaItems.map((item) => (
                                 <AgendaItemCard key={item.id} meetingId={meetingId} agendaItem={item}/>
                             ))
                         ) : (
@@ -119,23 +124,20 @@ const useRouteMeetingId = (): string => {
     return typeof params?.id === "string" ? params.id : "";
 };
 
-const isMeetingStarted = (meeting?: MeetingFullDto | undefined): boolean => {
+const isMeetingStarted = (meeting?: MeetingDto | undefined): boolean => {
     if (!meeting) {
         return false;
     }
-    if (typeof meeting.started === "number" && meeting.started > 0) {
+    if (meeting.started > 0) {
         return true;
     }
-    if (typeof meeting.status === "string") {
-        const s = meeting.status as MeetingStatusName;
-        if (s === "Published") {
-            return true;
-        }
+    if (meeting.status === "Published") {
+        return true;
     }
     return false;
 };
 
-const getTitle = (isLoading: boolean, meeting?: MeetingFullDto): string => {
+const getTitle = (isLoading: boolean, meeting?: MeetingDto): string => {
     if (isLoading) {
         return "Loading meeting…";
     }

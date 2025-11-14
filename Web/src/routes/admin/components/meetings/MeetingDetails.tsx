@@ -17,10 +17,6 @@ export default function MeetingDetails({
     const goEdit = () => navigate(`/admin/meetings/${meeting.id}`);
 
     const goStartMeeting = () => {
-        // TODO: keep any pre-flight checks here (e.g. confirm start / permissions)
-        
-        
-        
         navigate(`/admin/meetings/${meeting.id}/live`);
     };
 

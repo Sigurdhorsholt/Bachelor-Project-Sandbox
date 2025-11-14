@@ -17,19 +17,62 @@ public class AgendaController : ControllerBase
         await _db.Meetings.FirstOrDefaultAsync(m => m.Id == meetingId);
 
     // GET: /api/meetings/{meetingId}/agenda
+    // Query param: includePropositions=true to include nested propositions
     [HttpGet]
-    public async Task<IActionResult> GetAgenda(Guid meetingId)
+    public async Task<IActionResult> GetAgenda(Guid meetingId, [FromQuery] bool includePropositions = false)
     {
         var exists = await _db.Meetings.AnyAsync(m => m.Id == meetingId);
         if (!exists) return NotFound("Meeting not found.");
 
-        var items = await _db.AgendaItems
+        if (!includePropositions)
+        {
+            var items = await _db.AgendaItems
+                .Where(a => a.MeetingId == meetingId)
+                .AsNoTracking()
+                .Select(a => new { a.Id, a.Title, a.Description })
+                .ToListAsync();
+
+            return Ok(items);
+        }
+
+        // Include propositions with vote options and votations
+        var itemsWithPropositions = await _db.AgendaItems
             .Where(a => a.MeetingId == meetingId)
+            .Include(a => a.Propositions)
+                .ThenInclude(p => p.Options)
+            .Include(a => a.Propositions)
+                .ThenInclude(p => p.Votations.Where(v => v.MeetingId == meetingId))
             .AsNoTracking()
-            .Select(a => new { a.Id, a.Title, a.Description })
+            .Select(a => new
+            {
+                a.Id,
+                a.Title,
+                a.Description,
+                Propositions = a.Propositions.Select(p => new
+                {
+                    p.Id,
+                    Question = p.Question,
+                    VoteType = p.VoteType,
+                    VoteOptions = p.Options.Select(o => new { o.Id, o.Label }).ToList(),
+                    Votations = p.Votations
+                        .Where(v => v.MeetingId == meetingId && v.PropositionId == p.Id)
+                        .Select(v => new
+                        {
+                            v.Id,
+                            v.MeetingId,
+                            v.PropositionId,
+                            v.StartedAtUtc,
+                            v.EndedAtUtc,
+                            v.Open,
+                            v.Overwritten
+                        })
+                        .ToList(),
+                    IsOpen = p.Votations.Any(v => v.Open)
+                }).ToList()
+            })
             .ToListAsync();
 
-        return Ok(items);
+        return Ok(itemsWithPropositions);
     }
 
     public record CreateAgendaItemRequest(string Title, string? Description);

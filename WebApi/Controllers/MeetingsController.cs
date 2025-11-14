@@ -36,17 +36,14 @@ public class MeetingsController : ControllerBase
     }
 
     // GET: /api/meetings/{id}
+    // Returns only meeting metadata (no nested agenda/propositions)
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetMeetingFullById(Guid id)
+    public async Task<IActionResult> GetMeetingById(Guid id)
     {
         var m = await _db.Meetings
-            .Include(x => x.AgendaItems)
-            .ThenInclude(a => a.Propositions)
-            .ThenInclude(p => p.Votations)
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id);
         if (m is null) return NotFound();
-
         
         return Ok(new
         {
@@ -56,34 +53,7 @@ public class MeetingsController : ControllerBase
             StartsAtUtc = m.StartsAtUtc,
             Status = m.Status.ToString(),
             MeetingCode = m.MeetingCode,
-            Started = m.Started,
-            Agenda = m.AgendaItems.Select(a => new
-            {
-                a.Id,
-                a.Title,
-                a.Description,
-                Propositions = a.Propositions.Select(p => new
-                {
-                    p.Id,
-                    Question = p.Question,
-                    VoteType = p.VoteType,
-                    Votations = p.Votations.Where(v => v.MeetingId == a.MeetingId && v.PropositionId == p.Id)
-                        .Select(v => new
-                        {
-                            v.MeetingId,
-                            v.Id,
-                            v.EndedAtUtc,
-                            v.Open,
-                            v.Overwritten,
-                            v.PropositionId,
-                            v.StartedAtUtc
-                        }),
-                    IsOpen = p.Votations.Any(v => v.Open),
-                    VoteOptions = p.Options
-                        .Select(o => new { o.Id, o.Label })
-                        .ToList()
-                }).ToList()
-            }).ToList()
+            Started = m.Started
         });
     }
 

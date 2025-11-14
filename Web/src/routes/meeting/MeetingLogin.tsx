@@ -17,7 +17,7 @@ import type { RootState } from "../../Redux/store";
 
 export default function MeetingLogin() {
     const { id: meetingCode } = useParams<{ id: string }>();
-    const [accessCode, setAccessCode] = useState("3GCT2EKT");
+    const [accessCode, setAccessCode] = useState("TZL56J4D");
     const [attendeeLogin, { isLoading, error }] = useAttendeeLoginMutation();
     const dispatch = useDispatch();
     const nav = useNavigate();

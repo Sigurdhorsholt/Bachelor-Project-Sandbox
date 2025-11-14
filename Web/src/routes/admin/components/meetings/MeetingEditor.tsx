@@ -22,14 +22,15 @@ import AddIcon from "@mui/icons-material/Add";
 
 import AccessManager, {type AccessMode, type VerificationCode} from "./AccessManager";
 import {
-    useGetMeetingFullQuery,
     usePatchMeetingMutation,
     useCreateAgendaItemMutation,
     useUpdateAgendaItemMutation,
     useGetTicketsQuery,
     useGenerateTicketsMutation,
     useClearTicketsMutation,
-    useReplaceTicketsMutation,
+    useReplaceTicketsMutation, 
+    useGetMeetingQuery, 
+    useGetAgendaQuery,
 } from "../../../../Redux/meetingsApi"; // fixed relative path
 import AgendaItemCard from "./components/AgendaItemCardAdminView.tsx";
 
@@ -45,7 +46,14 @@ export default function MeetingEditor() {
     const navigate = useNavigate();
 
     // Fetch full meeting (agenda + propositions)
-    const {data: meeting, isFetching, isError, refetch} = useGetMeetingFullQuery(id, {skip: !id});
+   // const {data: meeting, isFetching, isError, refetch} = useGetMeetingFullQuery(meetingIdParam, {skip: !id});
+
+    console.log("MeetingEditor rendering for meetingIdParam:", id);
+    const { data: meeting, isFetching: meetingIsFetching, isError: meetingIsError} = useGetMeetingQuery(id, {skip: !id});
+    const { data: agendaItems } = useGetAgendaQuery(id, {skip: !id});
+
+    
+
 
     // Tickets from server
     const { data: tickets, refetch: refetchTickets } = useGetTicketsQuery(id, { skip: !id });
@@ -124,7 +132,7 @@ export default function MeetingEditor() {
         setErrorMsg(null);
         try {
             await patchMeeting({meetingId: meeting.id, patch}).unwrap();
-            await refetch(); // refresh full meeting
+            // RTK Query automatically refetches due to tag invalidation
         } catch (e: any) {
             setErrorMsg(asErrorText(e));
         } finally {
@@ -176,7 +184,7 @@ export default function MeetingEditor() {
             } else if (agendaDialogMode === "rename" && agendaDialogTargetId) {
                 await updateAgendaItem({ meetingId: meeting.id, itemId: agendaDialogTargetId, title }).unwrap();
             }
-            await refetch();
+            // RTK Query automatically refetches due to tag invalidation
             setAgendaDialogOpen(false);
         } catch (e) {
             // ignore errors here; the top-level error handling will show messages elsewhere
@@ -198,9 +206,9 @@ export default function MeetingEditor() {
         setErrorMsg(null);
         try {
             const res = await patchMeeting({ meetingId: meeting.id, patch: { regenerateMeetingCode: true } }).unwrap();
-            // res includes meetingCode via transformResponse; update local state and refresh data
+            // res includes meetingCode via transformResponse; update local state
             if (res?.meetingCode) setMeetingCode(res.meetingCode);
-            await refetch();
+            // RTK Query automatically refetches due to tag invalidation
         } catch (e: any) {
             setErrorMsg((e && e.data) ? (e.data as any) : (e.message ?? "Failed to regenerate code"));
         } finally {
@@ -258,7 +266,7 @@ export default function MeetingEditor() {
         URL.revokeObjectURL(a.href);
     }
 
-    if (!id) {
+    if (!meeting) {
         return
         (
             <Container maxWidth="lg" className="py-6">
@@ -269,7 +277,7 @@ export default function MeetingEditor() {
         );
     }
 
-    if (isFetching && !meeting) {
+    if (meetingIsFetching && !meeting) {
         return (
             <Container maxWidth="lg" className="py-6">
                 <Typography>
@@ -279,7 +287,7 @@ export default function MeetingEditor() {
         );
     }
 
-    if (isError || !meeting) {
+    if (meetingIsError || !meeting) {
         return (
             <Container maxWidth="lg" className="py-6">
                 <Typography>
@@ -396,25 +404,29 @@ export default function MeetingEditor() {
 
                     <Divider className="my-3"/>
 
-                    <div className="space-y-2">
-                        {meeting.agenda.map((a, i) => (
-                            <AgendaItemCard
-                                key={a.id}
-                                meetingId={meeting.id}
-                                itemId={a.id}
-                                index={i}
-                                title={a.title}
-                                description={a.description}
-                                locked={isLocked}
-                                onRequestRename={openRenameAgendaDialog}
-                            />
-                        ))}
-                        {meeting.agenda.length === 0 && (
-                            <Typography variant="body2" className="!text-slate-500">
-                                Ingen dagsordenspunkter endnu.
-                            </Typography>
-                        )}
-                    </div>
+                    {agendaItems &&
+                        <div className="space-y-2">
+                            {agendaItems.map((a, i) => (
+                                <AgendaItemCard
+                                    key={a.id}
+                                    meetingId={meeting.id}
+                                    itemId={a.id}
+                                    index={i}
+                                    title={a.title}
+                                    description={a.description}
+                                    locked={isLocked}
+                                    onRequestRename={openRenameAgendaDialog}
+                                />
+                            ))}
+                            {agendaItems.length === 0 && (
+                                <Typography variant="body2" className="!text-slate-500">
+                                    Ingen dagsordenspunkter endnu.
+                                </Typography>
+                            )}
+                        </div>
+                    }
+                    
+                   
                 </Paper>
 
                 {/* Agenda add / rename dialog */}

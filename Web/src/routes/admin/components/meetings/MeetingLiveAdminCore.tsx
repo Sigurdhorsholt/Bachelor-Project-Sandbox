@@ -7,6 +7,7 @@ import {
     CardContent,
     CardHeader,
     Chip,
+    CircularProgress,
     Divider,
     List,
     ListItem,
@@ -29,12 +30,20 @@ import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 
 import {
     useStartMeetingMutation,
-    useStopMeetingMutation
+    useStopMeetingMutation,
+    useGetVotationsByPropositionQuery
 } from "../../../../Redux/meetingsApi.ts";
 import { useMeetingChannel } from "../../../../realTime/useMeetingChannel.ts";
 import {useStartVoteAndCreateVotationMutation, useStopVotationMutation} from "../../../../Redux/votationApi.ts";
+import type { MeetingDto } from "../../../../domain/meetings.ts";
+import type { AgendaItemFull } from "../../../../domain/agenda.ts";
 
-export default function MeetingLiveAdminCore({ meeting }: { meeting: any }) {
+type MeetingLiveAdminCoreProps = {
+    meeting: MeetingDto;
+    agenda: AgendaItemFull[];
+};
+
+export default function MeetingLiveAdminCore({ meeting, agenda }: MeetingLiveAdminCoreProps) {
     const navigate = useNavigate();
 
     // Start SignalR subscription now that meeting exists
@@ -49,24 +58,33 @@ export default function MeetingLiveAdminCore({ meeting }: { meeting: any }) {
     const [attendance, _setAttendance] = useState({ present: 0, registered: 0 });
     const [voteProgress, setVoteProgress] = useState({ cast: 0, total: 0 });
 
-    const [startMeeting] = useStartMeetingMutation();
-    const [stopMeeting] = useStopMeetingMutation();
+    const [startMeeting, { isLoading: isStartingMeeting }] = useStartMeetingMutation();
+    const [stopMeeting, { isLoading: isStoppingMeeting }] = useStopMeetingMutation();
     
-    const [startVoteAndCreateVotation] = useStartVoteAndCreateVotationMutation();
-    const [stopVotation] = useStopVotationMutation();
+    const [startVoteAndCreateVotation, { isLoading: isOpeningVote }] = useStartVoteAndCreateVotationMutation();
+    const [stopVotation, { isLoading: isClosingVote }] = useStopVotationMutation();
 
     useEffect(() => {
         setSelectedAgendaIndex(-1);
         setSelectedPropIndex(-1);
-    }, [meeting]);
+    }, [meeting.id, agenda]);
 
     useEffect(() => {
         setVoteProgress({ cast: 0, total: 0 });
     }, [meeting.id]);
 
-    const agenda = meeting?.agenda ?? [];
     const selectedAgenda = agenda[selectedAgendaIndex] ?? null;
     const selectedProposition = selectedAgenda?.propositions?.[selectedPropIndex] ?? null;
+
+    // Fetch votations for the selected proposition
+    const { data: votations } = useGetVotationsByPropositionQuery(
+        { meetingId: meeting.id, propositionId: selectedProposition?.id ?? "" },
+        { skip: !selectedProposition }
+    );
+
+    // Check if there's an open votation for the selected proposition
+    const hasOpenVotation = votations?.some(v => v.open) ?? false;
+    const openVotation = votations?.find(v => v.open);
 
     const goBack = () => navigate(-1);
 
@@ -77,7 +95,7 @@ export default function MeetingLiveAdminCore({ meeting }: { meeting: any }) {
     };
 
     const handleCloseVote = () => {
-        if (selectedProposition) {
+        if (openVotation && selectedProposition && openVotation.propositionId === selectedProposition.id) {
             stopVotation(selectedProposition.id);
         }
     };
@@ -136,7 +154,7 @@ export default function MeetingLiveAdminCore({ meeting }: { meeting: any }) {
                 <Box className="flex items-center justify-between">
                     <Box className="space-y-0.5">
                         <Typography variant="h5" fontWeight={700}>
-                            Live: {meeting?.title ?? "—"}
+                            Live: {meeting.title ?? "—"}
                         </Typography>
                     </Box>
 
@@ -151,20 +169,20 @@ export default function MeetingLiveAdminCore({ meeting }: { meeting: any }) {
                         <Button
                             variant="contained"
                             color="primary"
-                            startIcon={<PlayCircleOutlineIcon />}
-                            disabled={meeting?.started == 1}
+                            startIcon={isStartingMeeting ? <CircularProgress size={20} color="inherit" /> : <PlayCircleOutlineIcon />}
+                            disabled={meeting.started === 1 || isStartingMeeting || isStoppingMeeting}
                             onClick={handleStartMeeting}
                         >
-                            Start Møde
+                            {isStartingMeeting ? "Starting..." : "Start Møde"}
                         </Button>
                         <Button
                             variant="contained"
                             color="error"
-                            startIcon={<PowerSettingsNewRoundedIcon />}
-                            disabled={meeting?.started == 0}
+                            startIcon={isStoppingMeeting ? <CircularProgress size={20} color="inherit" /> : <PowerSettingsNewRoundedIcon />}
+                            disabled={meeting.started === 0 || isStartingMeeting || isStoppingMeeting}
                             onClick={handleStopMeeting}
                         >
-                            Stop Møde
+                            {isStoppingMeeting ? "Stopping..." : "Stop Møde"}
                         </Button>
 
                     </Box>
@@ -296,19 +314,19 @@ export default function MeetingLiveAdminCore({ meeting }: { meeting: any }) {
                                 <Box className="mt-4 grid grid-cols-2 gap-2">
                                     <Button
                                         variant="contained"
-                                        startIcon={<PlayArrowRoundedIcon />}
-                                        disabled={!selectedProposition}
+                                        startIcon={isOpeningVote ? <CircularProgress size={20} color="inherit" /> : <PlayArrowRoundedIcon />}
+                                        disabled={!selectedProposition || hasOpenVotation || isOpeningVote || isClosingVote}
                                         onClick={handleOpenVote}
                                     >
-                                        Open vote
+                                        {isOpeningVote ? "Opening..." : "Open vote"}
                                     </Button>
                                     <Button
                                         variant="outlined"
-                                        startIcon={<StopRoundedIcon />}
-                                        disabled={!selectedProposition}
+                                        startIcon={isClosingVote ? <CircularProgress size={20} color="inherit" /> : <StopRoundedIcon />}
+                                        disabled={!selectedProposition || !hasOpenVotation || isOpeningVote || isClosingVote}
                                         onClick={handleCloseVote}
                                     >
-                                        Close vote
+                                        {isClosingVote ? "Closing..." : "Close vote"}
                                     </Button>
 
                                     <Button

@@ -30,13 +30,20 @@ export const votationApi = api.injectEndpoints({
         startVoteAndCreateVotation: b.mutation<VotationDto, { meetingId: string; propositionId: string }>({
             query: ({ meetingId, propositionId }) => ({ url: `/votation/start/${meetingId}/${propositionId}`, method: "POST" }),
             transformResponse: (raw: any) => toVotation(raw),
-            invalidatesTags: (result, _err, { meetingId }) => [{ type: "Meeting" as const, id: meetingId }],
+            invalidatesTags: (result, _err, { meetingId, propositionId }) => [
+                { type: "Meeting", id: meetingId },
+                { type: "Votations", id: propositionId }
+            ],
         }),
 
-        // POST /api/votation/stop/{votationId}
+        // POST /api/votation/stop/{propositionId}
         stopVotation: b.mutation<VotationDto, string>({
-            query: (propositionId) => ({ url: `/votation/stop/${propositionId}`, method: "POST" }),            transformResponse: (raw: any) => toVotation(raw),
-            invalidatesTags: (result) => (result ? [{ type: "Meeting" as const, id: result.meetingId }] : []),
+            query: (propositionId) => ({ url: `/votation/stop/${propositionId}`, method: "POST" }),
+            transformResponse: (raw: any) => toVotation(raw),
+            invalidatesTags: (result) => result ? [
+                { type: "Meeting", id: result.meetingId },
+                { type: "Votations", id: result.propositionId }
+            ] : [],
         }),
 
         // GET /api/votation/{votationId}

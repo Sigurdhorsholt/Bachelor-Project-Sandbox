@@ -1,6 +1,6 @@
 import { api } from "./api";
 import type {
-    MeetingStatus, MeetingDto, MeetingListItemDto, MeetingStatusName, CreateMeetingPayload, MeetingFullDto,
+    MeetingStatus, MeetingDto, MeetingListItemDto, MeetingStatusName, CreateMeetingPayload,
     PublicMeetingMeta
 } from "../domain/meetings";
 import type {AgendaItemDto, AgendaItemFull} from "../domain/agenda";
@@ -14,7 +14,7 @@ export const meetingsApi = api.injectEndpoints({
         // List meetings for division
         getMeetings: b.query<MeetingListItemDto[], string>({
             query: (divisionId) => `/divisions/${divisionId}/meetings`,
-            providesTags: (_r, _e, divisionId) => [{ type: "Meeting", id: `LIST-${divisionId}` }],
+            providesTags: (_r, _e, divisionId) => [{ type: "Meeting", id: divisionId }],
             transformResponse: (items: any[]) => items.map(i => ({
                 id: i.id,
                 title: i.title,
@@ -29,7 +29,7 @@ export const meetingsApi = api.injectEndpoints({
                 method: "POST",
                 body: { Title: title, StartsAtUtc: startsAtUtc, Status: status },
             }),
-            invalidatesTags: (_r, _e, { divisionId }) => [{ type: "Meeting", id: `LIST-${divisionId}` }],
+            invalidatesTags: (_r, _e, { divisionId }) => [{ type: "Meeting", id: divisionId }],
             transformResponse: (i: any) => ({
                 id: i.id,
                 title: i.title,
@@ -43,7 +43,7 @@ export const meetingsApi = api.injectEndpoints({
         // Meeting (single)
         getMeeting: b.query<MeetingDto, string>({
             query: (meetingId) => `/meetings/${meetingId}`,
-            providesTags: (_r, _e, meetingId) => [{ type: "Meeting" as const, id: meetingId }],
+            providesTags: (_r, _e, meetingId) => [{ type: "Meeting", id: meetingId }],
             transformResponse: (i: any) => ({
                 id: i.id,
                 divisionId: i.divisionId ?? i.DivisionId ?? "",
@@ -55,42 +55,63 @@ export const meetingsApi = api.injectEndpoints({
             }) as MeetingDto,
         }),
 
-        getMeetingFull: b.query<MeetingFullDto, string>({
-            query: (meetingId) => `/meetings/${meetingId}`,
+        // Get agenda items with optional nested propositions (with vote options and votations)
+        getAgendaWithPropositions: b.query<AgendaItemFull[], string>({
+            query: (meetingId) => `/meetings/${meetingId}/agenda?includePropositions=true`,
             providesTags: (_r, _e, meetingId) => [
-                { type: "Meeting", id: meetingId },
                 { type: "Agenda", id: meetingId },
+                { type: "Propositions", id: meetingId },
             ],
-            transformResponse: (raw: any): MeetingFullDto => ({
-                id: raw.id,
-                divisionId: raw.divisionId ?? raw.DivisionId ?? "",
-                title: raw.title,
-                startsAtUtc: raw.startsAtUtc ?? raw.StartsAtUtc,
-                status: normalizeStatus(raw.status ?? raw.Status),
-                meetingCode: raw.meetingCode ?? raw.MeetingCode ?? undefined,
-                started: raw.started ?? raw.Started ?? 0,
-                agenda: (raw.agenda ?? raw.Agenda ?? []).map((a: any): AgendaItemFull => ({
+            transformResponse: (items: any[]): AgendaItemFull[] => 
+                items.map((a: any): AgendaItemFull => ({
                     id: a.id ?? a.Id,
                     title: a.title ?? a.Title,
                     description: a.description ?? a.Description ?? null,
                     propositions: (a.propositions ?? a.Propositions ?? []).map((p: any): PropositionDto => ({
                         id: p.id ?? p.Id,
-                        question: p.question ?? p.Question ?? p.title ?? p.Title ?? "",
+                        question: p.question ?? p.Question ?? "",
                         voteType: p.voteType ?? p.VoteType ?? "YesNoBlank",
                         voteOptions: (p.voteOptions ?? p.VoteOptions ?? []).map((o: any): VoteOptionDto => ({
                             id: o.id ?? o.Id,
-                            label: o.label ?? o.Label ?? String(o.id ?? o.Id ?? ""),
+                            label: o.label ?? o.Label ?? "",
                         })),
                     })),
                 })),
-            }),
+        }),
+
+        // Get propositions with optional vote options and votations
+        getPropositionsWithDetails: b.query<PropositionDto[], { meetingId: string; itemId: string; includeVoteOptions?: boolean; includeVotations?: boolean }>({
+            query: ({ meetingId, itemId, includeVoteOptions = true, includeVotations = false }) => {
+                const params = new URLSearchParams();
+                if (includeVoteOptions) params.append('includeVoteOptions', 'true');
+                if (includeVotations) params.append('includeVotations', 'true');
+                const queryString = params.toString();
+                return `/meetings/${meetingId}/agenda/${itemId}/propositions${queryString ? `?${queryString}` : ''}`;
+            },
+            providesTags: (_r, _e, { itemId }) => [{ type: "Propositions", id: itemId }],
+            transformResponse: (props: any[]): PropositionDto[] =>
+                props.map((p: any): PropositionDto => ({
+                    id: p.id ?? p.Id,
+                    question: p.question ?? p.Question ?? "",
+                    voteType: p.voteType ?? p.VoteType ?? "YesNoBlank",
+                    voteOptions: (p.voteOptions ?? p.VoteOptions ?? []).map((o: any): VoteOptionDto => ({
+                        id: o.id ?? o.Id,
+                        label: o.label ?? o.Label ?? "",
+                    })),
+                })),
+        }),
+
+        // Get votations by proposition
+        getVotationsByProposition: b.query<any[], { meetingId: string; propositionId: string }>({
+            query: ({ meetingId, propositionId }) => `/votation/by-proposition/${meetingId}/${propositionId}`,
+            providesTags: (_r, _e, { propositionId }) => [{ type: "Votations", id: propositionId }],
         }),
 
         getMeetingPublic: b.query<PublicMeetingMeta, string>({
             // backend: GET /api/meetings/meta?code={code}
             query: (meetingId) => `/meetings/meta?meetingId=${meetingId}`,
             providesTags: (result, _err, meetingId) => [
-                { type: "Meeting" as const, id: result?.id ?? `CODE-${meetingId}` }
+                { type: "Meeting", id: result?.id ?? meetingId }
             ],
             transformResponse: (raw: any) =>
                 ({
@@ -130,32 +151,16 @@ export const meetingsApi = api.injectEndpoints({
                     }))
                 }))
             }),
-            invalidatesTags: (result, _err, arg) => {
-                const tags: any[] = [{ type: "Meeting", id: arg.meetingId }];
-                if (arg.divisionId) tags.push({ type: "Meeting", id: `LIST-${arg.divisionId}` });
-                return tags;
-            },
-            async onQueryStarted({ meetingId }, { dispatch, queryFulfilled }) {
-                try {
-                    const { data } = await queryFulfilled;
-                    // Update full meeting cache if present
-                    dispatch(meetingsApi.util.updateQueryData('getMeetingFull', meetingId, (draft: any) => {
-                        draft.title = data.title;
-                        draft.startsAtUtc = data.startsAtUtc;
-                        draft.status = data.status;
-                        if (data.agenda) {
-                            draft.agenda = data.agenda;
-                        }
-                        if (data.meetingCode) draft.meetingCode = data.meetingCode;
-                    }));
-                } catch { /* ignore */ }
-            }
+            invalidatesTags: (_r, _e, { meetingId, divisionId }) => [
+                { type: "Meeting", id: meetingId },
+                { type: "Meeting", id: divisionId },
+            ],
         }),
 
         // Agenda
         getAgenda: b.query<AgendaItemDto[], string>({
             query: (meetingId) => `/meetings/${meetingId}/agenda`,
-            providesTags: (_r, _e, meetingId) => [{ type: "Agenda" as const, id: meetingId }],
+            providesTags: (_r, _e, meetingId) => [{ type: "Agenda", id: meetingId }],
         }),
 
         createAgendaItem: b.mutation<AgendaItemDto, { meetingId: string; title: string; description?: string | null }>({
@@ -187,7 +192,7 @@ export const meetingsApi = api.injectEndpoints({
         // Propositions
         getPropositions: b.query<PropositionDto[], { meetingId: string; itemId: string }>({
             query: ({ meetingId, itemId }) => `/meetings/${meetingId}/agenda/${itemId}/propositions`,
-            providesTags: (_r, _e, { itemId }) => [{ type: "Propositions" as const, id: itemId }],
+            providesTags: (_r, _e, { itemId }) => [{ type: "Propositions", id: itemId }],
         }),
 
         createProposition: b.mutation<PropositionDto, { meetingId: string; itemId: string; question: string; voteType: string }>({
@@ -225,7 +230,7 @@ export const meetingsApi = api.injectEndpoints({
         // Vote options
         getVoteOptions: b.query<VoteOptionDto[], { meetingId: string; itemId: string; propId: string }>({
             query: ({ meetingId, itemId, propId }) => `/meetings/${meetingId}/agenda/${itemId}/propositions/${propId}/vote-options`,
-            providesTags: (_r, _e, { propId }) => [{ type: "VoteOptions" as const, id: propId }],
+            providesTags: (_r, _e, { propId }) => [{ type: "VoteOptions", id: propId }],
         }),
 
         createVoteOption: b.mutation<VoteOptionDto, { meetingId: string; itemId: string; propId: string; label: string }>({
@@ -272,7 +277,7 @@ export const meetingsApi = api.injectEndpoints({
         // Tickets
         getTickets: b.query<TicketDto[], string>({
             query: (meetingId) => `/meetings/${meetingId}/codes`,
-            providesTags: (_r, _e, meetingId) => [{ type: "Ticket", id: `LIST-${meetingId}` }],
+            providesTags: (_r, _e, meetingId) => [{ type: "Ticket", id: meetingId }],
         }),
 
         generateTickets: b.mutation<TicketDto[], { meetingId: string; count: number }>({
@@ -281,7 +286,7 @@ export const meetingsApi = api.injectEndpoints({
                 method: "POST",
             }),
             invalidatesTags: (_r, _e, { meetingId }) => [
-                { type: "Ticket", id: `LIST-${meetingId}` },
+                { type: "Ticket", id: meetingId },
                 { type: "MeetingAccess", id: meetingId },
             ],
         }),
@@ -290,7 +295,7 @@ export const meetingsApi = api.injectEndpoints({
         clearTickets: b.mutation<void, string>({
             query: (meetingId) => ({ url: `/meetings/${meetingId}/codes`, method: "DELETE" }),
             invalidatesTags: (_r, _e, meetingId) => [
-                { type: "Ticket", id: `LIST-${meetingId}` },
+                { type: "Ticket", id: meetingId },
                 { type: "MeetingAccess", id: meetingId },
             ],
         }),
@@ -301,7 +306,7 @@ export const meetingsApi = api.injectEndpoints({
                 method: "POST" 
             }),
             invalidatesTags: (_r, _e, { meetingId }) => [
-                { type: "Ticket", id: `LIST-${meetingId}` },
+                { type: "Ticket", id: meetingId },
                 { type: "MeetingAccess", id: meetingId },
             ],
         }),
@@ -369,16 +374,18 @@ export const {
     useCreateMeetingMutation,
 
     useGetMeetingQuery,
-    useGetMeetingFullQuery,
     usePatchMeetingMutation,
     useGetMeetingPublicQuery,
 
     useGetAgendaQuery,
+    useGetAgendaWithPropositionsQuery,
     useCreateAgendaItemMutation,
     useUpdateAgendaItemMutation,
     useDeleteAgendaItemMutation,
 
     useGetPropositionsQuery,
+    useGetPropositionsWithDetailsQuery,
+    useGetVotationsByPropositionQuery,
     useCreatePropositionMutation,
     useUpdatePropositionMutation,
     useDeletePropositionMutation,

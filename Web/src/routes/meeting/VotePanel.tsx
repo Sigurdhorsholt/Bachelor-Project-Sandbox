@@ -9,12 +9,13 @@ import type {VoteOptionDto} from "../../domain/voteOptions.ts";
 type Props = {
     meetingId: string;
     proposition: PropositionDto;
+    votationId?: string; // The open votation ID (undefined when closed)
     isOpen: boolean; // controlled by live state (SignalR) later
 };
 
 /* ---------------- Component ---------------- */
 
-export const VotePanel: React.FC<Props> = ({ meetingId, proposition, isOpen }) => {
+export const VotePanel: React.FC<Props> = ({ meetingId, proposition, votationId, isOpen }) => {
     const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
     const isYesNo = proposition.voteType === "YesNoBlank";
 
@@ -24,16 +25,19 @@ export const VotePanel: React.FC<Props> = ({ meetingId, proposition, isOpen }) =
     };
 
     const handleCastVote = (): void => {
-        if (!isOpen || !selectedOptionId) { return; }
+        if (!isOpen || !selectedOptionId || !votationId) { return; }
         const picked = findOptionById(proposition.voteOptions, selectedOptionId);
         if (!picked) { return; }
 
         // TODO: implement actual cast via RTK Mutation / endpoint
-        // handleCastVote(proposition, picked, votationId)
-        // - proposition: PropositionVm
-        // - voteoption: VoteOption
-        // - votationId: string (pass from live context when admin opens the vote)
-        console.log("Cast vote (TODO)", { meetingId, propositionId: proposition.id, optionId: picked.id });
+        // POST /api/vote/cast
+        // Body: { votationId, voteOptionId, ticketId }
+        console.log("Cast vote (TODO)", { 
+            meetingId, 
+            propositionId: proposition.id, 
+            votationId,
+            voteOptionId: picked.id 
+        });
     };
 
     return (
