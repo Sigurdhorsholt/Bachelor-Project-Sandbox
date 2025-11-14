@@ -85,10 +85,14 @@ public class VotationController : ControllerBase
         return Ok(votation);
     }
 
-    [HttpPost("stop/{votationId}:guid")]
-    public async Task<IActionResult> StopVotation(Guid votationId)
+    [HttpPost("stop/{propositionId:guid}")]
+    public async Task<IActionResult> StopVotation(Guid propositionId)
     {
-        var votation = await _db.Votations.FindAsync(votationId);
+        var votation = await _db.Votations
+            .Where(v => v.PropositionId == propositionId && v.Open)
+            .OrderByDescending(v => v.StartedAtUtc)
+            .FirstOrDefaultAsync();
+        
         if (votation == null)
         {
             return NotFound("Votation not found.");

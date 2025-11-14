@@ -1,4 +1,5 @@
 // WebApi/Controllers/MeetingsController.cs
+
 using Application.Domain.Entities;
 using Application.Persistence;
 using Microsoft.AspNetCore.Mvc;
@@ -39,11 +40,14 @@ public class MeetingsController : ControllerBase
     public async Task<IActionResult> GetMeetingFullById(Guid id)
     {
         var m = await _db.Meetings
-            .Include(x => x.AgendaItems).ThenInclude(a => a.Propositions)
+            .Include(x => x.AgendaItems)
+            .ThenInclude(a => a.Propositions)
+            .ThenInclude(p => p.Votations)
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id);
         if (m is null) return NotFound();
 
+        
         return Ok(new
         {
             m.Id,
@@ -63,6 +67,18 @@ public class MeetingsController : ControllerBase
                     p.Id,
                     Question = p.Question,
                     VoteType = p.VoteType,
+                    Votations = p.Votations.Where(v => v.MeetingId == a.MeetingId && v.PropositionId == p.Id)
+                        .Select(v => new
+                        {
+                            v.MeetingId,
+                            v.Id,
+                            v.EndedAtUtc,
+                            v.Open,
+                            v.Overwritten,
+                            v.PropositionId,
+                            v.StartedAtUtc
+                        }),
+                    IsOpen = p.Votations.Any(v => v.Open),
                     VoteOptions = p.Options
                         .Select(o => new { o.Id, o.Label })
                         .ToList()
@@ -75,6 +91,7 @@ public class MeetingsController : ControllerBase
     {
         public string? Title { get; set; }
         public DateTime? StartsAtUtc { get; set; }
+
         [JsonConverter(typeof(JsonStringEnumConverter))]
         public MeetingStatus? Status { get; set; }
 
@@ -146,19 +163,20 @@ public class MeetingsController : ControllerBase
                 a.Id,
                 a.Title,
                 a.Description,
-                Propositions = a.Propositions.Select(p => new { p.Id, Question = p.Question, VoteType = p.VoteType }).ToList()
+                Propositions = a.Propositions.Select(p => new { p.Id, Question = p.Question, VoteType = p.VoteType })
+                    .ToList()
             }).ToList()
         });
     }
-    
-    
+
+
     [HttpPost("{id}/start")]
     public async Task<IActionResult> StartMeeting(string id, CancellationToken cancellationToken)
     {
         var meeting = await _db.Meetings
             .AsTracking()
             .FirstOrDefaultAsync(x => x.Id == Guid.Parse(id), cancellationToken);
-        
+
         if (meeting is null)
         {
             return NotFound();
@@ -180,15 +198,15 @@ public class MeetingsController : ControllerBase
 
         return NoContent();
     }
-    
-    
+
+
     [HttpPost("{id}/stop")]
     public async Task<IActionResult> StopMeeting(string id, CancellationToken cancellationToken)
     {
         var meeting = await _db.Meetings
             .AsTracking()
             .FirstOrDefaultAsync(x => x.Id == Guid.Parse(id), cancellationToken);
-        
+
         if (meeting is null)
         {
             return NotFound();
@@ -210,19 +228,19 @@ public class MeetingsController : ControllerBase
 
         return NoContent();
     }
-    
+
     // GET: /api/meetings/meta?id={meetingCode}
     [HttpGet("meta")]
     public async Task<IActionResult> GetMeetingMeta([FromQuery] string meetingId, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(meetingId)) return BadRequest("Meeting code is required.");
-        
+
         var meeting = await _db.Meetings
             .AsNoTracking()
             .FirstOrDefaultAsync(m => m.Id.ToString() == meetingId, cancellationToken);
-        
+
         if (meeting == null) return null;
-        
+
         var meetingMetaDto = new MeetingMetaDto
         {
             Id = meeting.Id,
@@ -232,7 +250,7 @@ public class MeetingsController : ControllerBase
             MeetingCode = meeting.MeetingCode,
             Started = meeting.Started
         };
-        
+
         return Ok(meetingMetaDto);
     }
 }

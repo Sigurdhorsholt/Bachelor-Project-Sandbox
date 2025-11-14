@@ -6,9 +6,10 @@ import MenuIcon from "@mui/icons-material/Menu";
 type Props = {
     onMenuClick: () => void;
     onLogout: () => void;
+    logoutButtonText?: string;
 };
 
-export default function TopBar({ onMenuClick, onLogout }: Props) {
+export default function TopBar({ onMenuClick, onLogout, logoutButtonText }: Props) {
     return (
         <AppBar position="static" elevation={0} color="transparent">
             <Toolbar className="!px-3 sm:!px-6">
@@ -30,7 +31,13 @@ export default function TopBar({ onMenuClick, onLogout }: Props) {
                         onClick={onLogout}
                         className="hidden sm:flex"
                     >
-                        Logout
+                        {logoutButtonText &&
+                            logoutButtonText
+                        }
+                        {!logoutButtonText &&
+                            "Log ud"
+                        }
+                        
                     </Button>
                 </div>
             </Toolbar>

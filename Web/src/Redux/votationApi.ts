@@ -35,8 +35,7 @@ export const votationApi = api.injectEndpoints({
 
         // POST /api/votation/stop/{votationId}
         stopVotation: b.mutation<VotationDto, string>({
-            query: (votationId) => ({ url: `/votation/stop/${votationId}`, method: "POST" }),
-            transformResponse: (raw: any) => toVotation(raw),
+            query: (propositionId) => ({ url: `/votation/stop/${propositionId}`, method: "POST" }),            transformResponse: (raw: any) => toVotation(raw),
             invalidatesTags: (result) => (result ? [{ type: "Meeting" as const, id: result.meetingId }] : []),
         }),
 
