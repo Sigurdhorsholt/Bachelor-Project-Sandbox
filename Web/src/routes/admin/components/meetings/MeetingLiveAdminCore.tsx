@@ -35,6 +35,7 @@ import {
 } from "../../../../Redux/meetingsApi.ts";
 import { useMeetingChannel } from "../../../../realTime/useMeetingChannel.ts";
 import {useStartVoteAndCreateVotationMutation, useStopVotationMutation} from "../../../../Redux/votationApi.ts";
+import { useGetVotationResultsQuery } from "../../../../Redux/voteApi.ts";
 import type { MeetingDto } from "../../../../domain/meetings.ts";
 import type { AgendaItemFull } from "../../../../domain/agenda.ts";
 
@@ -56,7 +57,6 @@ export default function MeetingLiveAdminCore({ meeting, agenda }: MeetingLiveAdm
 
     // prefixed setters are unused placeholders to avoid lint warnings until wired up
     const [attendance, _setAttendance] = useState({ present: 0, registered: 0 });
-    const [voteProgress, setVoteProgress] = useState({ cast: 0, total: 0 });
 
     const [startMeeting, { isLoading: isStartingMeeting }] = useStartMeetingMutation();
     const [stopMeeting, { isLoading: isStoppingMeeting }] = useStopMeetingMutation();
@@ -69,9 +69,6 @@ export default function MeetingLiveAdminCore({ meeting, agenda }: MeetingLiveAdm
         setSelectedPropIndex(-1);
     }, [meeting.id, agenda]);
 
-    useEffect(() => {
-        setVoteProgress({ cast: 0, total: 0 });
-    }, [meeting.id]);
 
     const selectedAgenda = agenda[selectedAgendaIndex] ?? null;
     const selectedProposition = selectedAgenda?.propositions?.[selectedPropIndex] ?? null;
@@ -85,6 +82,15 @@ export default function MeetingLiveAdminCore({ meeting, agenda }: MeetingLiveAdm
     // Check if there's an open votation for the selected proposition
     const hasOpenVotation = votations?.some(v => v.open) ?? false;
     const openVotation = votations?.find(v => v.open);
+
+    // Fetch vote results for the open votation
+    const { data: voteResults } = useGetVotationResultsQuery(
+        openVotation?.id ?? "",
+        { 
+            skip: !openVotation?.id,
+            pollingInterval: 5000 // Poll every 5 seconds for live updates
+        }
+    );
 
     const goBack = () => navigate(-1);
 
@@ -400,8 +406,37 @@ export default function MeetingLiveAdminCore({ meeting, agenda }: MeetingLiveAdm
                                         Vote progress:
                                     </Typography>
                                     <Typography variant="h6" fontWeight={800}>
-                                        {voteProgress.cast} / {voteProgress.total}
+                                        {voteResults?.totalVotes ?? 0} votes cast
                                     </Typography>
+                                    
+                                    {voteResults && voteResults.results.length > 0 && (
+                                        <Box className="mt-3 space-y-2">
+                                            {voteResults.results.map((result) => (
+                                                <Box key={result.voteOptionId} className="flex items-center justify-between">
+                                                    <Typography variant="body2" fontWeight={600}>
+                                                        {result.label}:
+                                                    </Typography>
+                                                    <Chip 
+                                                        label={result.count} 
+                                                        size="small" 
+                                                        color={result.count > 0 ? "primary" : "default"}
+                                                    />
+                                                </Box>
+                                            ))}
+                                        </Box>
+                                    )}
+                                    
+                                    {!voteResults && openVotation && (
+                                        <Typography variant="caption" color="text.secondary">
+                                            Loading results...
+                                        </Typography>
+                                    )}
+                                    
+                                    {!openVotation && (
+                                        <Typography variant="caption" color="text.secondary">
+                                            No active votation
+                                        </Typography>
+                                    )}
                                 </Box>
 
                                 <Box className="mt-4">

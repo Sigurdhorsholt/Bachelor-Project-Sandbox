@@ -40,6 +40,7 @@ export default function MeetingLogin() {
                 accessToken: result.accessToken,
                 meetingId: result.meetingId,
                 ticketId: result.ticketId,
+                ticketCode: accessCode.trim(),
             }));
             console.log("lol s", meetingCode);
         } catch (err) {

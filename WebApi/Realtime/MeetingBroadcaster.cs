@@ -13,6 +13,9 @@ public interface IMeetingBroadcaster
     
     Task MeetingPropositionOpened(string meetingId, string propositionId, string votationId);
     Task MeetingVotationStopped(string meetingId, string propositionId, string votationId, DateTime stoppedAtUtc);
+    
+    Task VoteCast(string meetingId, string propositionId, string votationId);
+    Task VoteChanged(string meetingId, string propositionId, string votationId);
 
 }
 
@@ -110,6 +113,30 @@ public class MeetingBroadcaster : IMeetingBroadcaster
         return Task.WhenAll(
             _hub.Clients.Group(MeetingHub.MeetingGroup(meetingId)).PropositionVoteStopped(dto),
             _hub.Clients.Group(MeetingHub.AdminsGroup).PropositionVoteStopped(dto)
+        );
+    }
+    
+    public Task VoteCast(string meetingId, string propositionId, string votationId)
+    {
+        var dto = new VoteCastDto(meetingId, propositionId, votationId);
+        _logger.LogInformation("Broadcasting VoteCast {MeetingId} prop={Prop} votation={Votation}",
+            meetingId, propositionId, votationId);
+
+        return Task.WhenAll(
+            _hub.Clients.Group(MeetingHub.MeetingGroup(meetingId)).VoteCast(dto),
+            _hub.Clients.Group(MeetingHub.AdminsGroup).VoteCast(dto)
+        );
+    }
+    
+    public Task VoteChanged(string meetingId, string propositionId, string votationId)
+    {
+        var dto = new VoteChangedDto(meetingId, propositionId, votationId);
+        _logger.LogInformation("Broadcasting VoteChanged {MeetingId} prop={Prop} votation={Votation}",
+            meetingId, propositionId, votationId);
+
+        return Task.WhenAll(
+            _hub.Clients.Group(MeetingHub.MeetingGroup(meetingId)).VoteChanged(dto),
+            _hub.Clients.Group(MeetingHub.AdminsGroup).VoteChanged(dto)
         );
     }
 }

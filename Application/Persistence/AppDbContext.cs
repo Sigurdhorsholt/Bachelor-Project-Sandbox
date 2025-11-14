@@ -101,9 +101,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             .HasForeignKey(bal => bal.AdmissionTicketId);
 
         b.Entity<Ballot>()
-            .HasOne(bal => bal.Proposition)
-            .WithMany()
-            .HasForeignKey(bal => bal.PropositionId);
+            .HasOne(bal => bal.Votation)
+            .WithMany(v => v.Ballots)
+            .HasForeignKey(bal => bal.VotationId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         b.Entity<Ballot>()
             .HasOne(bal => bal.VoteOption)

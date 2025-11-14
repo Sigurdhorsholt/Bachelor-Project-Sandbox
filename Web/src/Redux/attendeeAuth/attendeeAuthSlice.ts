@@ -4,11 +4,12 @@ type AttendeeAuthState = {
     accessToken: string | null;
     meetingId: string | null;
     ticketId: string | null;
+    ticketCode: string | null;
 };
 
 const initial: AttendeeAuthState = (() => {
     const raw = sessionStorage.getItem("attendeeAuth");
-    return raw ? JSON.parse(raw) : { accessToken: null, meetingId: null, ticketId: null };
+    return raw ? JSON.parse(raw) : { accessToken: null, meetingId: null, ticketId: null, ticketCode: null };
 })();
 
 const slice = createSlice({
@@ -23,6 +24,7 @@ const slice = createSlice({
             state.accessToken = null;
             state.meetingId = null;
             state.ticketId = null;
+            state.ticketCode = null;
             sessionStorage.removeItem("attendeeAuth");
         },
     },

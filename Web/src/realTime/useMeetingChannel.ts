@@ -323,6 +323,48 @@ export function useMeetingChannel(meetingId?: string, onStateChanged?: () => voi
                 { type: "Votations", id: dtoPropositionId }
             ]));
         });
+
+        connection.on("VoteCast", (dto: any) => {
+            console.debug("[useMeetingChannel] received VoteCast", dto);
+            if (dto == null) {
+                return;
+            }
+
+            const dtoMeetingId = dto.meetingId ?? (dto as any).MeetingId;
+            const dtoPropositionId = dto.propositionId ?? (dto as any).PropositionId;
+            const dtoVotationId = dto.votationId ?? (dto as any).VotationId;
+            
+            if (dtoMeetingId !== meetingId) {
+                return;
+            }
+            
+            // Invalidate votation tags to refetch vote results
+            dispatch(meetingsApi.util.invalidateTags([
+                { type: "Votations", id: dtoPropositionId },
+                { type: "Votations", id: dtoVotationId }
+            ]));
+        });
+
+        connection.on("VoteChanged", (dto: any) => {
+            console.debug("[useMeetingChannel] received VoteChanged", dto);
+            if (dto == null) {
+                return;
+            }
+
+            const dtoMeetingId = dto.meetingId ?? (dto as any).MeetingId;
+            const dtoPropositionId = dto.propositionId ?? (dto as any).PropositionId;
+            const dtoVotationId = dto.votationId ?? (dto as any).VotationId;
+            
+            if (dtoMeetingId !== meetingId) {
+                return;
+            }
+            
+            // Invalidate votation tags to refetch vote results
+            dispatch(meetingsApi.util.invalidateTags([
+                { type: "Votations", id: dtoPropositionId },
+                { type: "Votations", id: dtoVotationId }
+            ]));
+        });
     }
 
 }

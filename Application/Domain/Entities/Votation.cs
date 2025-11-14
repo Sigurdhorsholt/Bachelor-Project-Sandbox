@@ -15,4 +15,6 @@ public class Votation
 
     public bool Open { get; set; }
     public bool Overwritten { get; set; }
+
+    public ICollection<Ballot> Ballots { get; set; } = new List<Ballot>();
 }

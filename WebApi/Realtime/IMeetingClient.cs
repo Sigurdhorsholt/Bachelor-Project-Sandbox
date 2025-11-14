@@ -1,4 +1,4 @@
-﻿using System.Threading.Tasks;
+﻿﻿using System.Threading.Tasks;
 
 namespace WebApi.Realtime
 {
@@ -19,6 +19,9 @@ namespace WebApi.Realtime
         
         Task PropositionVoteOpened(PropositionOpenedDto dto);
         Task PropositionVoteStopped(VotationStoppedDto dto);
+        
+        Task VoteCast(VoteCastDto dto);
+        Task VoteChanged(VoteChangedDto dto);
     }
     
     // Tiny DTOs for clarity & evolvability
@@ -31,6 +34,9 @@ namespace WebApi.Realtime
     
     public record PropositionOpenedDto(string MeetingId, string PropositionId, string VotationId);
     public record VotationStoppedDto(string MeetingId, string PropositionId, string VotationId, DateTime StoppedAtUtc);
+    
+    public record VoteCastDto(string MeetingId, string PropositionId, string VotationId);
+    public record VoteChangedDto(string MeetingId, string PropositionId, string VotationId);
 
 }
 
