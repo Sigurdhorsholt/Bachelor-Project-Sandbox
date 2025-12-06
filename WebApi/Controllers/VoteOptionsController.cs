@@ -3,11 +3,13 @@ using Application.Domain.Entities;
 using Application.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Authorization;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/meetings/{meetingId:guid}/agenda/{itemId:guid}/propositions/{propId:guid}/vote-options")]
+[Authorize]
 public class VoteOptionsController : ControllerBase
 {
     private readonly AppDbContext _db;
