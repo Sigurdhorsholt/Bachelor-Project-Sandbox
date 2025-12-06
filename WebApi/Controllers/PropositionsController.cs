@@ -1,8 +1,11 @@
 // WebApi/Controllers/PropositionsController.cs
 using Application.Domain.Entities;
-using Application.Persistence;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using MediatR;
+using Application.Propositions.Queries.GetPropositions;
+using Application.Propositions.Commands.CreateProposition;
+using Application.Propositions.Commands.UpdateProposition;
+using Application.Propositions.Commands.DeleteProposition;
 
 namespace WebApi.Controllers;
 
@@ -10,74 +13,46 @@ namespace WebApi.Controllers;
 [Route("api/meetings/{meetingId:guid}/agenda/{itemId:guid}/propositions")]
 public class PropositionsController : ControllerBase
 {
-    private readonly AppDbContext _db;
-    public PropositionsController(AppDbContext db) => _db = db;
+    private readonly IMediator _mediator;
 
-    private Task<Meeting?> GetMeeting(Guid meetingId) =>
-        _db.Meetings.FirstOrDefaultAsync(m => m.Id == meetingId);
-
-    private Task<bool> AgendaItemExists(Guid meetingId, Guid itemId) =>
-        _db.AgendaItems.AnyAsync(a => a.Id == itemId && a.MeetingId == meetingId);
+    public PropositionsController(IMediator mediator)
+    {
+        _mediator = mediator;
+    }
 
     // GET: /api/meetings/{meetingId}/agenda/{itemId}/propositions
     // Query params: includeVoteOptions=true, includeVotations=true
     [HttpGet]
-    public async Task<IActionResult> Get(Guid meetingId, Guid itemId, 
-        [FromQuery] bool includeVoteOptions = false, 
+    public async Task<IActionResult> Get(Guid meetingId, Guid itemId,
+        [FromQuery] bool includeVoteOptions = false,
         [FromQuery] bool includeVotations = false)
     {
-        if (!await AgendaItemExists(meetingId, itemId)) return NotFound("Agenda item not found.");
-
-        if (!includeVoteOptions && !includeVotations)
+        try
         {
-            var list = await _db.Propositions
-                .Where(p => p.AgendaItemId == itemId)
-                .AsNoTracking()
-                .Select(p => new { p.Id, p.Question, p.VoteType })
-                .ToListAsync();
+            var items = await _mediator.Send(new GetPropositionsQuery(meetingId, itemId, includeVoteOptions, includeVotations));
 
-            return Ok(list);
-        }
+            if (!includeVoteOptions && !includeVotations)
+            {
+                var list = items.Select(p => new { p.Id, p.Question, p.VoteType }).ToList();
+                return Ok(list);
+            }
 
-        var query = _db.Propositions
-            .Where(p => p.AgendaItemId == itemId)
-            .AsNoTracking();
-
-        if (includeVoteOptions)
-            query = query.Include(p => p.Options);
-
-        if (includeVotations)
-            query = query.Include(p => p.Votations.Where(v => v.MeetingId == meetingId));
-
-        var propositions = await query
-            .Select(p => new
+            var detailed = items.Select(p => new
             {
                 p.Id,
                 p.Question,
                 p.VoteType,
-                VoteOptions = includeVoteOptions 
-                    ? p.Options.Select(o => new { o.Id, o.Label }).ToList()
-                    : null,
-                Votations = includeVotations
-                    ? p.Votations
-                        .Where(v => v.MeetingId == meetingId)
-                        .Select(v => new
-                        {
-                            v.Id,
-                            v.MeetingId,
-                            v.PropositionId,
-                            v.StartedAtUtc,
-                            v.EndedAtUtc,
-                            v.Open,
-                            v.Overwritten
-                        })
-                        .ToList()
-                    : null,
-                IsOpen = includeVotations && p.Votations.Any(v => v.Open)
-            })
-            .ToListAsync();
+                VoteOptions = p.VoteOptions?.Select(o => new { o.Id, o.Label }).ToList(),
+                Votations = p.Votations?.Select(v => new { v.Id, v.MeetingId, v.PropositionId, v.StartedAtUtc, v.EndedAtUtc, v.Open, v.Overwritten }).ToList(),
+                IsOpen = p.IsOpen
+            }).ToList();
 
-        return Ok(propositions);
+            return Ok(detailed);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
     }
 
     public record CreatePropositionRequest(string Question, string VoteType);
@@ -86,26 +61,23 @@ public class PropositionsController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> Create(Guid meetingId, Guid itemId, [FromBody] CreatePropositionRequest req)
     {
-        var meeting = await GetMeeting(meetingId);
-        if (meeting == null) return NotFound("Meeting not found.");
-        if (meeting.Status == MeetingStatus.Finished) return Conflict("Finished meetings cannot be edited.");
-
-        var exists = await _db.AgendaItems.AnyAsync(a => a.Id == itemId && a.MeetingId == meetingId);
-        if (!exists) return NotFound("Agenda item not found.");
-
-        if (string.IsNullOrWhiteSpace(req.Question)) return BadRequest("Question is required.");
-        if (string.IsNullOrWhiteSpace(req.VoteType)) return BadRequest("VoteType is required.");
-
-        var p = new Proposition {
-            Id = Guid.NewGuid(),
-            AgendaItemId = itemId,
-            Question = req.Question.Trim(),
-            VoteType = req.VoteType.Trim()
-        };
-        _db.Propositions.Add(p);
-        await _db.SaveChangesAsync();
-
-        return Ok(new { p.Id, p.Question, p.VoteType });
+        try
+        {
+            var res = await _mediator.Send(new CreatePropositionCommand(meetingId, itemId, req.Question, req.VoteType));
+            return Ok(new { res.Id, res.Question, res.VoteType });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(ex.Message);
+        }
     }
 
     public record UpdatePropositionRequest(string? Question, string? VoteType);
@@ -114,49 +86,51 @@ public class PropositionsController : ControllerBase
     [HttpPatch("{propId:guid}")]
     public async Task<IActionResult> Update(Guid meetingId, Guid itemId, Guid propId, [FromBody] UpdatePropositionRequest req)
     {
-        var meeting = await GetMeeting(meetingId);
-        if (meeting == null) return NotFound("Meeting not found.");
-        if (meeting.Status == MeetingStatus.Finished) return Conflict("Finished meetings cannot be edited.");
-
-        var p = await _db.Propositions
-            .Where(x => x.Id == propId && x.AgendaItemId == itemId)
-            .AsTracking()
-            .FirstOrDefaultAsync();
-        if (p == null) return NotFound();
-
-        if (req.Question is not null)
+        try
         {
-            var q = req.Question.Trim();
-            if (q.Length == 0) return BadRequest("Question cannot be empty.");
-            p.Question = q;
+            var res = await _mediator.Send(new UpdatePropositionCommand(meetingId, itemId, propId, req.Question, req.VoteType));
+            return Ok(new { res.Id, res.Question, res.VoteType });
         }
-        if (req.VoteType is not null)
+        catch (KeyNotFoundException ex)
         {
-            var vt = req.VoteType.Trim();
-            if (vt.Length == 0) return BadRequest("VoteType cannot be empty.");
-            p.VoteType = vt;
-        }
+            if (ex.Message.Contains("Proposition"))
+            {
+                return NotFound();
+            }
 
-        await _db.SaveChangesAsync();
-        return Ok(new { p.Id, p.Question, p.VoteType });
+            return NotFound(ex.Message);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(ex.Message);
+        }
     }
 
     // DELETE
     [HttpDelete("{propId:guid}")]
     public async Task<IActionResult> Delete(Guid meetingId, Guid itemId, Guid propId)
     {
-        var meeting = await GetMeeting(meetingId);
-        if (meeting == null) return NotFound("Meeting not found.");
-        if (meeting.Status == MeetingStatus.Finished) return Conflict("Finished meetings cannot be edited.");
+        try
+        {
+            await _mediator.Send(new DeletePropositionCommand(meetingId, itemId, propId));
+            return NoContent();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            if (ex.Message.Contains("Proposition"))
+            {
+                return NotFound();
+            }
 
-        var p = await _db.Propositions
-            .Where(x => x.Id == propId && x.AgendaItemId == itemId)
-            .AsTracking()
-            .FirstOrDefaultAsync();
-        if (p == null) return NotFound();
-
-        _db.Propositions.Remove(p);
-        await _db.SaveChangesAsync();
-        return NoContent();
+            return NotFound(ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(ex.Message);
+        }
     }
 }

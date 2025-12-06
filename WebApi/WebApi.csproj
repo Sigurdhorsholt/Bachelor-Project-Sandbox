@@ -17,6 +17,8 @@
       <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
       <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.4" />
       <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
+      <PackageReference Include="MediatR" Version="11.1.0" />
+      <PackageReference Include="MediatR.Extensions.Microsoft.DependencyInjection" Version="11.1.0" />
     </ItemGroup>
 
     <ItemGroup>
@@ -26,6 +28,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <Folder Include="Services\" />
       <Folder Include="wwwroot\" />
     </ItemGroup>
 

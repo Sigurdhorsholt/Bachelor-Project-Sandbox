@@ -1,8 +1,8 @@
 using Application.Persistence;
+using Application.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using WebApi.Services;
 
 namespace WebApi.Infrastructure;
 

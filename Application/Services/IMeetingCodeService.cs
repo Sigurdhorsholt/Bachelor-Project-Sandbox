@@ -1,9 +1,6 @@
-﻿// filepath: c:\Users\sigur\Documents\GitHub\Bachelor-Project-Sandbox\WebApi\Services\IMeetingCodeService.cs
-using System.Threading;
-using System.Threading.Tasks;
-using WebApi.DTOs;
+﻿
 
-namespace WebApi.Services;
+namespace Application.Services;
 
 public interface IMeetingCodeService
 {

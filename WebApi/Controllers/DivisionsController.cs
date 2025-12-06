@@ -2,10 +2,11 @@
 
 using System.Text.Json.Serialization;
 using Application.Domain.Entities;
-using Application.Persistence;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using WebApi.Services;
+
+using Application.Divisions.Queries.GetMeetings;
+using Application.Divisions.Commands.CreateMeeting;
 
 namespace WebApi.Controllers;
 
@@ -13,37 +14,26 @@ namespace WebApi.Controllers;
 [Route("api/divisions")]
 public class DivisionsController : ControllerBase
 {
-    private readonly AppDbContext _db;
-    private readonly IMeetingCodeService _codeService;
+    private readonly IMediator _mediator;
 
-    public DivisionsController(AppDbContext db, IMeetingCodeService codeService)
+    public DivisionsController(IMediator mediator)
     {
-        _db = db;
-        _codeService = codeService;
+        _mediator = mediator;
     }
 
     // GET: /api/divisions/{divisionId}/meetings
     [HttpGet("{divisionId:guid}/meetings")]
     public async Task<IActionResult> GetMeetings(Guid divisionId)
     {
-        var exists = await _db.Divisions.AnyAsync(d => d.Id == divisionId);
-        if (!exists)
-            return NotFound("Division not found.");
-
-        var items = await _db.Meetings
-            .Where(m => m.DivisionId == divisionId)
-            .OrderBy(m => m.StartsAtUtc)
-            .AsNoTracking()
-            .Select(m => new
-            {
-                m.Id,
-                m.Title,
-                StartsAtUtc = m.StartsAtUtc,
-                Status = m.Status.ToString()
-            })
-            .ToListAsync();
-
-        return Ok(items);
+        try
+        {
+            var items = await _mediator.Send(new GetMeetingsQuery(divisionId));
+            return Ok(items);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
     }
 
     public record CreateMeetingRequest(
@@ -51,64 +41,36 @@ public class DivisionsController : ControllerBase
         DateTime StartsAtUtc,
         [property: JsonConverter(typeof(JsonStringEnumConverter))] MeetingStatus Status
     );
+
     // POST: /api/divisions/{divisionId}/meetings
     [HttpPost("{divisionId:guid}/meetings")]
     public async Task<IActionResult> CreateMeeting(Guid divisionId, [FromBody] CreateMeetingRequest req)
     {
-        if (string.IsNullOrWhiteSpace(req.Title))
-            return BadRequest("Title is required.");
-
-        var division = await _db.Divisions.FindAsync(divisionId);
-        if (division == null)
-            return NotFound("Division not found.");
-
-        // Try to create meeting, regenerating code if we hit unique constraint collisions
-        const int maxAttempts = 5;
-        for (int attempt = 0; attempt < maxAttempts; attempt++)
+        try
         {
-            string code;
-            try
-            {
-                code = await _codeService.GenerateUniqueCodeAsync();
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, "Failed to generate meeting code: " + ex.Message);
-            }
+            var cmd = new CreateMeetingCommand(divisionId, req.Title, req.StartsAtUtc, req.Status);
+            var result = await _mediator.Send(cmd);
 
-            var meeting = new Meeting
+            return Ok(new
             {
-                Id = Guid.NewGuid(),
-                DivisionId = divisionId,
-                Title = req.Title.Trim(),
-                StartsAtUtc = req.StartsAtUtc,
-                Status = req.Status,
-                MeetingCode = code
-            };
-
-            _db.Meetings.Add(meeting);
-            try
-            {
-                await _db.SaveChangesAsync();
-
-                return Ok(new
-                {
-                    meeting.Id,
-                    meeting.Title,
-                    StartsAtUtc = meeting.StartsAtUtc,
-                    Status = meeting.Status.ToString(),
-                    MeetingCode = meeting.MeetingCode
-                });
-            }
-            catch (DbUpdateException)
-            {
-                // Likely a unique constraint collision on MeetingCode, retry
-                _db.Entry(meeting).State = EntityState.Detached;
-                if (attempt == maxAttempts - 1)
-                    return StatusCode(500, "Failed to save meeting due to meeting code collision. Try again.");
-            }
+                result.Id,
+                result.Title,
+                StartsAtUtc = result.StartsAtUtc,
+                Status = result.Status,
+                MeetingCode = result.MeetingCode
+            });
         }
-
-        return StatusCode(500, "Failed to create meeting.");
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return StatusCode(500, ex.Message);
+        }
     }
 }

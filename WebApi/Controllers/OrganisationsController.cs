@@ -1,7 +1,15 @@
+using System;
+using System.Threading.Tasks;
 using Application.Persistence;
 using Application.Domain.Entities;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Application.Organisations.Queries.GetAll;
+using Application.Organisations.Queries.GetById;
+using Application.Organisations.Queries.GetDivisions;
+using Application.Organisations.Commands.CreateOrganisation;
+using Application.Organisations.Commands.CreateDivision;
 
 namespace WebApi.Controllers;
 
@@ -9,12 +17,12 @@ namespace WebApi.Controllers;
 [Route("api/organisations")]
 public class OrganisationsController : ControllerBase
 {
-    private readonly AppDbContext _db;
+    private readonly IMediator _mediator;
     private readonly ILogger<OrganisationsController> _logger;
 
-    public OrganisationsController(AppDbContext db, ILogger<OrganisationsController> logger)
+    public OrganisationsController(IMediator mediator, ILogger<OrganisationsController> logger)
     {
-        _db = db;
+        _mediator = mediator;
         _logger = logger;
     }
 
@@ -22,15 +30,7 @@ public class OrganisationsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        var orgs = await _db.Organisations
-            .AsNoTracking()
-            .Select(o => new
-            {
-                o.Id,
-                o.Name
-            })
-            .ToListAsync();
-
+        var orgs = await _mediator.Send(new GetAllOrganisationsQuery());
         return Ok(orgs);
     }
 
@@ -38,84 +38,71 @@ public class OrganisationsController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id)
     {
-        var org = await _db.Organisations
-            .Include(o => o.Divisions)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(o => o.Id == id);
-
-        if (org == null)
-            return NotFound();
-
-        return Ok(new
+        try
         {
-            org.Id,
-            org.Name,
-            Divisions = org.Divisions.Select(d => new { d.Id, d.Name })
-        });
+            var org = await _mediator.Send(new GetOrganisationQuery(id));
+
+            return Ok(new
+            {
+                org.Id,
+                org.Name,
+                Divisions = org.Divisions.Select(d => new { d.Id, d.Name })
+            });
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
     }
 
     // POST: /api/organisations
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateOrganisationRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
-            return BadRequest("Name is required.");
-
-        var entity = new Organisation
+        try
         {
-            Id = Guid.NewGuid(),
-            Name = request.Name
-        };
+            var res = await _mediator.Send(new CreateOrganisationCommand(request.Name));
 
-        _db.Organisations.Add(entity);
-        await _db.SaveChangesAsync();
-
-        return CreatedAtAction(nameof(GetById), new { id = entity.Id }, new
+            return CreatedAtAction(nameof(GetById), new { id = res.Id }, new { res.Id, res.Name });
+        }
+        catch (ArgumentException ex)
         {
-            entity.Id,
-            entity.Name
-        });
+            return BadRequest(ex.Message);
+        }
     }
 
     // GET: /api/organisations/{orgId}/divisions
     [HttpGet("{orgId:guid}/divisions")]
     public async Task<IActionResult> GetDivisions(Guid orgId)
     {
-        var orgExists = await _db.Organisations.AnyAsync(o => o.Id == orgId);
-        if (!orgExists)
-            return NotFound("Organisation not found.");
-
-        var divisions = await _db.Divisions
-            .Where(d => d.OrganisationId == orgId)
-            .AsNoTracking()
-            .Select(d => new { d.Id, d.Name })
-            .ToListAsync();
-
-        return Ok(divisions);
+        try
+        {
+            var divisions = await _mediator.Send(new GetDivisionsQuery(orgId));
+            return Ok(divisions.Select(d => new { d.Id, d.Name }));
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
     }
 
     // POST: /api/organisations/{orgId}/divisions
     [HttpPost("{orgId:guid}/divisions")]
     public async Task<IActionResult> CreateDivision(Guid orgId, [FromBody] CreateDivisionRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Name))
-            return BadRequest("Division name is required.");
-
-        var org = await _db.Organisations.FindAsync(orgId);
-        if (org == null)
-            return NotFound("Organisation not found.");
-
-        var division = new Division
+        try
         {
-            Id = Guid.NewGuid(),
-            OrganisationId = org.Id,
-            Name = request.Name
-        };
-
-        _db.Divisions.Add(division);
-        await _db.SaveChangesAsync();
-
-        return Ok(new { division.Id, division.Name });
+            var res = await _mediator.Send(new CreateDivisionCommand(orgId, request.Name));
+            return Ok(new { res.Id, res.Name });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(ex.Message);
+        }
     }
 }
 

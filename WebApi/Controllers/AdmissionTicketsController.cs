@@ -1,5 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using WebApi.Services;
+﻿using Application.Services;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
 namespace WebApi.Controllers;
@@ -8,19 +8,19 @@ namespace WebApi.Controllers;
 [Route("api/meetings/{meetingId:guid}/codes")]
 public class AdmissionTicketsController : ControllerBase
 {
-    private readonly IAdmissionTicketService _service;
+    private readonly IAdmissionTicketService _admissionTicketService;
     private readonly ILogger<AdmissionTicketsController> _logger;
 
-    public AdmissionTicketsController(IAdmissionTicketService service, ILogger<AdmissionTicketsController> logger)
+    public AdmissionTicketsController(IAdmissionTicketService admissionTicketService, ILogger<AdmissionTicketsController> logger)
     {
-        _service = service;
+        _admissionTicketService = admissionTicketService;
         _logger = logger;
     }
 
     [HttpGet]
     public async Task<IActionResult> Get(Guid meetingId)
     {
-        var list = await _service.GetForMeetingAsync(meetingId);
+        var list = await _admissionTicketService.GetForMeetingAsync(meetingId);
         return Ok(list);
     }
 
@@ -30,8 +30,8 @@ public class AdmissionTicketsController : ControllerBase
         if (count < 0 || count > 10000) return BadRequest("Count must be between 0 and 10000");
         try
         {
-            await _service.GenerateAsync(meetingId, count);
-            var list = await _service.GetForMeetingAsync(meetingId);
+            await _admissionTicketService.GenerateAsync(meetingId, count);
+            var list = await _admissionTicketService.GetForMeetingAsync(meetingId);
             return Ok(list);
         }
         catch (Exception ex)
@@ -46,7 +46,7 @@ public class AdmissionTicketsController : ControllerBase
     {
         try
         {
-            await _service.ClearAsync(meetingId);
+            await _admissionTicketService.ClearAsync(meetingId);
             return NoContent();
         }
         catch (Exception ex)
@@ -62,8 +62,8 @@ public class AdmissionTicketsController : ControllerBase
         if (count < 0 || count > 10000) return BadRequest("Count must be between 0 and 10000");
         try
         {
-            await _service.ReplaceAsync(meetingId, count);
-            var list = await _service.GetForMeetingAsync(meetingId);
+            await _admissionTicketService.ReplaceAsync(meetingId, count);
+            var list = await _admissionTicketService.GetForMeetingAsync(meetingId);
             return Ok(list);
         }
         catch (Exception ex)

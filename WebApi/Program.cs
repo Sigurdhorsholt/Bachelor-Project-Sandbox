@@ -1,6 +1,4 @@
 using System.Text;
-using Application;
-using Application.Abstractions;
 using Application.Persistence;
 using Application.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -8,7 +6,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using WebApi.Infrastructure;
 using WebApi.Realtime;
-using System.Threading.Tasks;
+using MediatR;
+using Application.Agendas.Queries.GetAgenda;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,7 +22,9 @@ builder.Services.AddCors(opts =>
         .AllowAnyMethod()));
 builder.Services.AddSignalR();
 builder.Services.AddScoped<IMeetingBroadcaster, MeetingBroadcaster>();
-builder.Services.AddSingleton<IGreetingService, GreetingService>();
+builder.Services.AddScoped<IAdmissionTicketService, AdmissionTicketService>();
+builder.Services.AddScoped<IMeetingCodeService, MeetingCodeService>();
+builder.Services.AddMediatR(typeof(GetAgendaQueryHandler).Assembly);
 builder.Services.AddControllers();
 
 var jwtKey   = builder.Configuration["Jwt:Key"]    ?? throw new Exception("Jwt:Key missing");
