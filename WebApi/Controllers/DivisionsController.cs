@@ -3,9 +3,9 @@
 using System.Text.Json.Serialization;
 using Application.Domain.Entities;
 using Application.Persistence;
+using Application.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using WebApi.Services;
 
 namespace WebApi.Controllers;
 
@@ -14,12 +14,12 @@ namespace WebApi.Controllers;
 public class DivisionsController : ControllerBase
 {
     private readonly AppDbContext _db;
-    private readonly IMeetingCodeService _codeService;
+    private readonly IMeetingCodeService _meetingCodeService;
 
-    public DivisionsController(AppDbContext db, IMeetingCodeService codeService)
+    public DivisionsController(AppDbContext db, IMeetingCodeService meetingCodeService)
     {
         _db = db;
-        _codeService = codeService;
+        _meetingCodeService = meetingCodeService;
     }
 
     // GET: /api/divisions/{divisionId}/meetings
@@ -69,7 +69,7 @@ public class DivisionsController : ControllerBase
             string code;
             try
             {
-                code = await _codeService.GenerateUniqueCodeAsync();
+                code = await _meetingCodeService.GenerateUniqueCodeAsync();
             }
             catch (Exception ex)
             {

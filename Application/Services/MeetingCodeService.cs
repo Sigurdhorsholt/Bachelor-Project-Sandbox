@@ -1,23 +1,18 @@
-﻿// filepath: c:\Users\sigur\Documents\GitHub\Bachelor-Project-Sandbox\WebApi\Services\MeetingCodeService.cs
+﻿using System.Security.Cryptography;
 using Application.Persistence;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Cryptography;
-using System.Threading;
-using System.Threading.Tasks;
-using WebApi.DTOs;
-using Application.Domain.Entities;
 
-namespace WebApi.Services;
+namespace Application.Services;
 
 public class MeetingCodeService : IMeetingCodeService
 {
-    private readonly AppDbContext _db;
+    private readonly AppDbContext _dbContext;
     private static readonly char[] Alph = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray();
     private readonly int _length = 6;
 
-    public MeetingCodeService(AppDbContext db)
+    public MeetingCodeService(AppDbContext dbContext)
     {
-        _db = db;
+        _dbContext = dbContext;
     }
 
     public async Task<string> GenerateUniqueCodeAsync(CancellationToken cancellationToken = default)
@@ -25,7 +20,7 @@ public class MeetingCodeService : IMeetingCodeService
         while (true)
         {
             var code = GenerateCode();
-            var exists = await _db.Meetings.AnyAsync(m => m.MeetingCode == code, cancellationToken);
+            var exists = await _dbContext.Meetings.AnyAsync(m => m.MeetingCode == code, cancellationToken);
             if (!exists) return code;
         }
     }
