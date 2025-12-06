@@ -11,6 +11,7 @@ namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/auth")]
+[Authorize]
 public class AuthController : ControllerBase
 {
     private readonly AppDbContext _db;

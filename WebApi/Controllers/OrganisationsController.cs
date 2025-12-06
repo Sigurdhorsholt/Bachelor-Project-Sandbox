@@ -10,11 +10,13 @@ using Application.Organisations.Queries.GetById;
 using Application.Organisations.Queries.GetDivisions;
 using Application.Organisations.Commands.CreateOrganisation;
 using Application.Organisations.Commands.CreateDivision;
+using Microsoft.AspNetCore.Authorization;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/organisations")]
+[Authorize]
 public class OrganisationsController : ControllerBase
 {
     private readonly IMediator _mediator;

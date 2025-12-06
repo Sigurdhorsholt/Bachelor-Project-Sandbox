@@ -6,11 +6,13 @@ using Application.Propositions.Queries.GetPropositions;
 using Application.Propositions.Commands.CreateProposition;
 using Application.Propositions.Commands.UpdateProposition;
 using Application.Propositions.Commands.DeleteProposition;
+using Microsoft.AspNetCore.Authorization;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/meetings/{meetingId:guid}/agenda/{itemId:guid}/propositions")]
+[Authorize]
 public class PropositionsController : ControllerBase
 {
     private readonly IMediator _mediator;

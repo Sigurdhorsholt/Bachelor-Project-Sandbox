@@ -1,4 +1,3 @@
-
 using Microsoft.AspNetCore.Mvc;
 using MediatR;
 using Application.Agendas.Queries.GetAgenda;
@@ -6,11 +5,13 @@ using Application.Agendas.Queries.GetAgendaSimple;
 using Application.Agendas.Commands.CreateAgendaItem;
 using Application.Agendas.Commands.UpdateAgendaItem;
 using Application.Agendas.Commands.DeleteAgendaItem;
+using Microsoft.AspNetCore.Authorization;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/meetings/{meetingId:guid}/agenda")]
+[Authorize]
 public class AgendaController : ControllerBase
 {
     private readonly IMediator _mediator;

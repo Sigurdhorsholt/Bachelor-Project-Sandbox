@@ -8,6 +8,8 @@ using WebApi.Infrastructure;
 using WebApi.Realtime;
 using MediatR;
 using Application.Agendas.Queries.GetAgenda;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +27,7 @@ builder.Services.AddScoped<IMeetingBroadcaster, MeetingBroadcaster>();
 builder.Services.AddScoped<IAdmissionTicketService, AdmissionTicketService>();
 builder.Services.AddScoped<IMeetingCodeService, MeetingCodeService>();
 builder.Services.AddMediatR(typeof(GetAgendaQueryHandler).Assembly);
+// Removed global authorization policy so controllers can opt-in with [Authorize]
 builder.Services.AddControllers();
 
 var jwtKey   = builder.Configuration["Jwt:Key"]    ?? throw new Exception("Jwt:Key missing");

@@ -3,11 +3,13 @@ using Application.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WebApi.Realtime;
+using Microsoft.AspNetCore.Authorization;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/vote")]
+[Authorize]
 public class VoteController : ControllerBase
 {
     private readonly AppDbContext _db;

@@ -1,11 +1,13 @@
 ﻿using Application.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Authorization;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/meetings/{meetingId:guid}/codes")]
+[Authorize]
 public class AdmissionTicketsController : ControllerBase
 {
     private readonly IAdmissionTicketService _admissionTicketService;

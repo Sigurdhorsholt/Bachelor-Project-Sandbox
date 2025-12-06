@@ -1,14 +1,16 @@
-﻿﻿using Application.Domain.Entities;
+﻿using Application.Domain.Entities;
 using Application.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WebApi.Realtime;
+using Microsoft.AspNetCore.Authorization;
 
 namespace WebApi.Controllers;
 
 
 [ApiController]
 [Route("api/votation/")]
+[Authorize]
 public class VotationController : ControllerBase
 {
     private AppDbContext _db;

@@ -10,11 +10,13 @@ using Application.Services;
 using Microsoft.Extensions.Logging;
 using WebApi.Realtime;
 using WebApi.DTOs;
+using Microsoft.AspNetCore.Authorization;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/meetings")]
+[Authorize]
 public class MeetingsController : ControllerBase
 {
     private AppDbContext _db;

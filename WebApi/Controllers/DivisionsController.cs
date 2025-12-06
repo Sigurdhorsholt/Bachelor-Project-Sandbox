@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using Application.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 using Application.Divisions.Queries.GetMeetings;
 using Application.Divisions.Commands.CreateMeeting;
@@ -12,6 +13,7 @@ namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/divisions")]
+[Authorize]
 public class DivisionsController : ControllerBase
 {
     private readonly IMediator _mediator;
