@@ -6,6 +6,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using WebApi.Infrastructure;
 using WebApi.Realtime;
+using MediatR;
+using Application.Agendas.Queries.GetAgenda;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +24,7 @@ builder.Services.AddSignalR();
 builder.Services.AddScoped<IMeetingBroadcaster, MeetingBroadcaster>();
 builder.Services.AddScoped<IAdmissionTicketService, AdmissionTicketService>();
 builder.Services.AddScoped<IMeetingCodeService, MeetingCodeService>();
+builder.Services.AddMediatR(typeof(GetAgendaQueryHandler).Assembly);
 builder.Services.AddControllers();
 
 var jwtKey   = builder.Configuration["Jwt:Key"]    ?? throw new Exception("Jwt:Key missing");
