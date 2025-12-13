@@ -1,18 +1,16 @@
-// WebApi/Controllers/PropositionsController.cs
-using Application.Domain.Entities;
-using Microsoft.AspNetCore.Mvc;
+// WebApi/Controllers/PropositionsController.csusing Microsoft.AspNetCore.Mvc;
 using MediatR;
 using Application.Propositions.Queries.GetPropositions;
 using Application.Propositions.Commands.CreateProposition;
 using Application.Propositions.Commands.UpdateProposition;
 using Application.Propositions.Commands.DeleteProposition;
 using Microsoft.AspNetCore.Authorization;
+using WebApi.DTOs;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/meetings/{meetingId:guid}/agenda/{itemId:guid}/propositions")]
-[Authorize]
 public class PropositionsController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -25,6 +23,7 @@ public class PropositionsController : ControllerBase
     // GET: /api/meetings/{meetingId}/agenda/{itemId}/propositions
     // Query params: includeVoteOptions=true, includeVotations=true
     [HttpGet]
+    [Authorize]
     public async Task<IActionResult> Get(Guid meetingId, Guid itemId,
         [FromQuery] bool includeVoteOptions = false,
         [FromQuery] bool includeVotations = false)
@@ -57,10 +56,9 @@ public class PropositionsController : ControllerBase
         }
     }
 
-    public record CreatePropositionRequest(string Question, string VoteType);
-
     // POST
     [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Create(Guid meetingId, Guid itemId, [FromBody] CreatePropositionRequest req)
     {
         try
@@ -72,20 +70,15 @@ public class PropositionsController : ControllerBase
         {
             return NotFound(ex.Message);
         }
-        catch (ArgumentException ex)
+        catch (Exception)
         {
-            return BadRequest(ex.Message);
-        }
-        catch (InvalidOperationException ex)
-        {
-            return Conflict(ex.Message);
+            return BadRequest();
         }
     }
 
-    public record UpdatePropositionRequest(string? Question, string? VoteType);
-
     // PATCH
     [HttpPatch("{propId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Update(Guid meetingId, Guid itemId, Guid propId, [FromBody] UpdatePropositionRequest req)
     {
         try
@@ -114,6 +107,7 @@ public class PropositionsController : ControllerBase
 
     // DELETE
     [HttpDelete("{propId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Delete(Guid meetingId, Guid itemId, Guid propId)
     {
         try

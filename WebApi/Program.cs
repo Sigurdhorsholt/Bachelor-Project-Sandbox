@@ -10,6 +10,7 @@ using MediatR;
 using Application.Agendas.Queries.GetAgenda;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Authorization;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,7 +28,7 @@ builder.Services.AddScoped<IMeetingBroadcaster, MeetingBroadcaster>();
 builder.Services.AddScoped<IAdmissionTicketService, AdmissionTicketService>();
 builder.Services.AddScoped<IMeetingCodeService, MeetingCodeService>();
 builder.Services.AddMediatR(typeof(GetAgendaQueryHandler).Assembly);
-// Removed global authorization policy so controllers can opt-in with [Authorize]
+// Controllers are authorized per-action
 builder.Services.AddControllers();
 
 var jwtKey   = builder.Configuration["Jwt:Key"]    ?? throw new Exception("Jwt:Key missing");
@@ -45,7 +46,6 @@ builder.Services
             ValidateLifetime = true, ClockSkew = TimeSpan.FromMinutes(1)
         };
 
-        // Allow access_token query string when connecting to SignalR hubs (WebSockets can't send Authorization header)
         o.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
@@ -56,6 +56,7 @@ builder.Services
                 {
                     context.Token = accessToken;
                 }
+
                 return Task.CompletedTask;
             }
         };
@@ -64,20 +65,43 @@ builder.Services
 builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("AttendeeOnly", policy =>
-        policy.RequireRole("Attendee"));
+    {
+        policy.RequireRole("Attendee");
+    });
+
     options.AddPolicy("AdminOnly", policy =>
-        policy.RequireAssertion(context =>
-            context.User.HasClaim(c => c.Type == System.Security.Claims.ClaimTypes.Role && c.Value != "Attendee")));
+    {
+        policy.RequireRole("Admin");
+    });
 });
 
 var app = builder.Build();
 app.UseRouting();
+
+// Centralized exception handling middleware
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Unhandled exception processing request");
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/json";
+        var payload = JsonSerializer.Serialize(new { error = "An internal server error occurred." });
+        await context.Response.WriteAsync(payload);
+    }
+});
 
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
 app.UseCors();
 
 if (!app.Environment.IsDevelopment())
@@ -93,7 +117,7 @@ app.UseStaticFiles();
 app.MapControllers();
 app.MapHub<MeetingHub>("/hub/meetings");
 
-//FAil fast test - if DB doesn't exist we crash here
+// Fail fast test - if DB doesn't exist we crash here
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -106,8 +130,7 @@ app.Logger.LogInformation("Using DB: {Path}",
 
 app.MapFallbackToFile("index.html");
 
-
-// Just to generate a hash for seeding an admin user
+// Generate a hash for seeding an admin user (console output)
 Console.WriteLine(BCrypt.Net.BCrypt.HashPassword("admin"));
 
 

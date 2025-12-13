@@ -4,25 +4,30 @@ using Application.Persistence;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
+using WebApi.DTOs;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/meetings/{meetingId:guid}/agenda/{itemId:guid}/propositions/{propId:guid}/vote-options")]
-[Authorize]
 public class VoteOptionsController : ControllerBase
 {
     private readonly AppDbContext _db;
     public VoteOptionsController(AppDbContext db) => _db = db;
 
-    private async Task<Meeting?> GetMeeting(Guid meetingId) =>
-        await _db.Meetings.FirstOrDefaultAsync(m => m.Id == meetingId);
+    private async Task<Meeting?> GetMeeting(Guid meetingId)
+    {
+        return await _db.Meetings.FirstOrDefaultAsync(m => m.Id == meetingId);
+    }
 
-    private Task<bool> PropositionExists(Guid propId) =>
-        _db.Propositions.AnyAsync(p => p.Id == propId);
+    private Task<bool> PropositionExists(Guid propId)
+    {
+        return _db.Propositions.AnyAsync(p => p.Id == propId);
+    }
 
     // GET
     [HttpGet]
+    [Authorize]
     public async Task<IActionResult> Get(Guid propId)
     {
         var opts = await _db.VoteOptions
@@ -34,20 +39,34 @@ public class VoteOptionsController : ControllerBase
         return Ok(opts);
     }
 
-    public record CreateVoteOptionRequest(string Label);
-
     // POST
     [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Create(Guid meetingId, Guid propId, [FromBody] CreateVoteOptionRequest req)
     {
         var meeting = await GetMeeting(meetingId);
-        if (meeting == null) return NotFound("Meeting not found.");
-        if (meeting.Status == MeetingStatus.Finished) return Conflict("Finished meetings cannot be edited.");
+        if (meeting == null)
+        {
+            return NotFound("Meeting not found.");
+        }
 
-        if (!await PropositionExists(propId)) return NotFound("Proposition not found.");
-        if (string.IsNullOrWhiteSpace(req.Label)) return BadRequest("Label is required.");
+        if (meeting.Status == MeetingStatus.Finished)
+        {
+            return Conflict("Finished meetings cannot be edited.");
+        }
 
-        var v = new VoteOption {
+        if (!await PropositionExists(propId))
+        {
+            return NotFound("Proposition not found.");
+        }
+
+        if (string.IsNullOrWhiteSpace(req.Label))
+        {
+            return BadRequest("Label is required.");
+        }
+
+        var v = new VoteOption
+        {
             Id = Guid.NewGuid(),
             PropositionId = propId,
             Label = req.Label.Trim()
@@ -59,23 +78,36 @@ public class VoteOptionsController : ControllerBase
         return Ok(new { v.Id, v.Label });
     }
 
-    public record UpdateVoteOptionRequest(string? Label);
-
     // PATCH
     [HttpPatch("{voteOptionId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Update(Guid meetingId, Guid propId, Guid voteOptionId, [FromBody] UpdateVoteOptionRequest req)
     {
         var meeting = await GetMeeting(meetingId);
-        if (meeting == null) return NotFound("Meeting not found.");
-        if (meeting.Status == MeetingStatus.Finished) return Conflict("Finished meetings cannot be edited.");
+        if (meeting == null)
+        {
+            return NotFound("Meeting not found.");
+        }
+
+        if (meeting.Status == MeetingStatus.Finished)
+        {
+            return Conflict("Finished meetings cannot be edited.");
+        }
 
         var v = await _db.VoteOptions.FirstOrDefaultAsync(x => x.Id == voteOptionId && x.PropositionId == propId);
-        if (v == null) return NotFound();
+        if (v == null)
+        {
+            return NotFound();
+        }
 
         if (req.Label is not null)
         {
             var l = req.Label.Trim();
-            if (l.Length == 0) return BadRequest("Label cannot be empty.");
+            if (l.Length == 0)
+            {
+                return BadRequest("Label cannot be empty.");
+            }
+
             v.Label = l;
         }
 
@@ -85,14 +117,25 @@ public class VoteOptionsController : ControllerBase
 
     // DELETE
     [HttpDelete("{voteOptionId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Delete(Guid meetingId, Guid propId, Guid voteOptionId)
     {
         var meeting = await GetMeeting(meetingId);
-        if (meeting == null) return NotFound("Meeting not found.");
-        if (meeting.Status == MeetingStatus.Finished) return Conflict("Finished meetings cannot be edited.");
+        if (meeting == null)
+        {
+            return NotFound("Meeting not found.");
+        }
+
+        if (meeting.Status == MeetingStatus.Finished)
+        {
+            return Conflict("Finished meetings cannot be edited.");
+        }
 
         var v = await _db.VoteOptions.FirstOrDefaultAsync(x => x.Id == voteOptionId && x.PropositionId == propId);
-        if (v == null) return NotFound();
+        if (v == null)
+        {
+            return NotFound();
+        }
 
         _db.VoteOptions.Remove(v);
         await _db.SaveChangesAsync();

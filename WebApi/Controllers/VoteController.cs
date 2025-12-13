@@ -4,12 +4,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using WebApi.Realtime;
 using Microsoft.AspNetCore.Authorization;
+using WebApi.DTOs;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/vote")]
-[Authorize]
 public class VoteController : ControllerBase
 {
     private readonly AppDbContext _db;
@@ -30,10 +30,13 @@ public class VoteController : ControllerBase
     /// Cast a vote using an admission ticket code
     /// </summary>
     [HttpPost("cast")]
+    [Authorize(Policy = "AttendeeOnly")]
     public async Task<IActionResult> CastVote([FromBody] CastVoteRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Code))
+        {
             return BadRequest("Admission ticket code is required.");
+        }
 
         await using var tx = await _db.Database.BeginTransactionAsync();
 
@@ -45,10 +48,14 @@ public class VoteController : ControllerBase
                 .FirstOrDefaultAsync(t => t.Code == request.Code);
 
             if (ticket == null)
+            {
                 return NotFound("Invalid admission ticket code.");
+            }
 
             if (ticket.MeetingId != request.MeetingId)
+            {
                 return BadRequest("This admission ticket does not belong to the specified meeting.");
+            }
 
             // 2. Find the open votation for this proposition
             var votation = await _db.Votations
@@ -59,7 +66,9 @@ public class VoteController : ControllerBase
                     v.Open);
 
             if (votation == null)
+            {
                 return NotFound("No open votation found for this proposition.");
+            }
 
             // 3. Validate vote option belongs to this proposition
             var voteOption = await _db.VoteOptions
@@ -68,7 +77,9 @@ public class VoteController : ControllerBase
                     vo.PropositionId == request.PropositionId);
 
             if (voteOption == null)
+            {
                 return BadRequest("Invalid vote option for this proposition.");
+            }
 
             // 4. CRITICAL: Check if this ticket has already voted in THIS votation
             var existingBallot = await _db.Ballots
@@ -194,6 +205,7 @@ public class VoteController : ControllerBase
     /// Get vote results for a votation
     /// </summary>
     [HttpGet("results/{votationId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> GetVotationResults(Guid votationId)
     {
         var votation = await _db.Votations
@@ -202,7 +214,15 @@ public class VoteController : ControllerBase
             .FirstOrDefaultAsync(v => v.Id == votationId);
 
         if (votation == null)
+        {
             return NotFound("Votation not found.");
+        }
+
+        var proposition = votation.Proposition;
+        if (proposition == null)
+        {
+            return NotFound("Proposition not found for this votation.");
+        }
 
         // Get all ballots for this votation with vote options
         var ballots = await _db.Ballots
@@ -210,7 +230,7 @@ public class VoteController : ControllerBase
             .Where(b => b.VotationId == votationId)
             .ToListAsync();
 
-        var results = votation.Proposition!.Options.Select(opt => new
+        var results = proposition.Options.Select(opt => new
         {
             VoteOptionId = opt.Id,
             Label = opt.Label,
@@ -221,7 +241,7 @@ public class VoteController : ControllerBase
         {
             VotationId = votation.Id,
             PropositionId = votation.PropositionId,
-            Question = votation.Proposition.Question,
+            Question = proposition.Question,
             TotalVotes = ballots.Count,
             Results = results,
             Open = votation.Open,
@@ -234,13 +254,16 @@ public class VoteController : ControllerBase
     /// Check if an admission ticket has voted in a specific votation
     /// </summary>
     [HttpGet("check/{code}/{votationId:guid}")]
+    [Authorize(Policy = "AttendeeOnly")]
     public async Task<IActionResult> CheckIfVoted(string code, Guid votationId)
     {
         var ticket = await _db.AdmissionTickets
             .FirstOrDefaultAsync(t => t.Code == code);
 
         if (ticket == null)
+        {
             return NotFound("Invalid admission ticket code.");
+        }
 
         var ballot = await _db.Ballots
             .Include(b => b.VoteOption)
@@ -250,12 +273,10 @@ public class VoteController : ControllerBase
 
         if (ballot == null)
         {
-            return Ok(new
-            {
-                HasVoted = false,
-                VotationId = votationId
-            });
+            return Ok(new { HasVoted = false, VotationId = votationId });
         }
+
+        var voteOptionLabel = ballot.VoteOption?.Label;
 
         return Ok(new
         {
@@ -263,7 +284,7 @@ public class VoteController : ControllerBase
             VotationId = votationId,
             BallotId = ballot.Id,
             VoteOptionId = ballot.VoteOptionId,
-            VoteOptionLabel = ballot.VoteOption.Label,
+            VoteOptionLabel = voteOptionLabel,
             CastAt = ballot.CastAtUtc
         });
     }
@@ -272,23 +293,26 @@ public class VoteController : ControllerBase
     /// Get all votes for a meeting (admin endpoint)
     /// </summary>
     [HttpGet("meeting/{meetingId:guid}/all")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> GetAllVotesForMeeting(Guid meetingId)
     {
         var meeting = await _db.Meetings.FindAsync(meetingId);
         if (meeting == null)
+        {
             return NotFound("Meeting not found.");
+        }
 
         var votes = await _db.Ballots
             .Include(b => b.Votation)
             .Include(b => b.VoteOption)
             .Include(b => b.Vote)
                 .ThenInclude(v => v.AuditableEvent)
-            .Where(b => b.Votation.MeetingId == meetingId)
+            .Where(b => b.Votation != null && b.Votation.MeetingId == meetingId)
             .Select(b => new
             {
                 BallotId = b.Id,
                 VotationId = b.VotationId,
-                PropositionId = b.Votation.PropositionId,
+                PropositionId = b.Votation!.PropositionId,
                 VoteOptionId = b.VoteOptionId,
                 VoteOptionLabel = b.VoteOption.Label,
                 CastAt = b.CastAtUtc,
@@ -303,6 +327,7 @@ public class VoteController : ControllerBase
     /// Revoke/delete a vote (admin endpoint)
     /// </summary>
     [HttpDelete("{ballotId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> RevokeVote(Guid ballotId)
     {
         await using var tx = await _db.Database.BeginTransactionAsync();
@@ -316,10 +341,14 @@ public class VoteController : ControllerBase
                 .FirstOrDefaultAsync(b => b.Id == ballotId);
 
             if (ballot == null)
+            {
                 return NotFound("Ballot not found.");
+            }
 
             if (!ballot.Votation.Open)
+            {
                 return BadRequest("Cannot revoke vote from a closed votation.");
+            }
 
             // Create revocation audit event before deleting
             var revocationEvent = new AuditableEvent
@@ -351,10 +380,3 @@ public class VoteController : ControllerBase
         }
     }
 }
-
-public record CastVoteRequest(
-    Guid MeetingId,
-    Guid PropositionId,
-    Guid VoteOptionId,
-    string Code
-);
