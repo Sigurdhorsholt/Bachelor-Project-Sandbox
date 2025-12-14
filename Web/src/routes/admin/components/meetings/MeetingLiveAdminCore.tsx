@@ -1,32 +1,14 @@
 ﻿import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-    Box,
-    Button,
-    Card,
-    CardContent,
-    CardHeader,
-    Chip,
-    CircularProgress,
-    Divider,
-    List,
-    ListItem,
-    ListItemButton,
-    ListItemText,
-    Typography,
-} from "@mui/material";
-import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
-import StopRoundedIcon from "@mui/icons-material/StopRounded";
-import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
-import NavigateNextRoundedIcon from "@mui/icons-material/NavigateNextRounded";
-import NavigateBeforeRoundedIcon from "@mui/icons-material/NavigateBeforeRounded";
-import PictureInPictureAltRoundedIcon from "@mui/icons-material/PictureInPictureAltRounded";
-import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
-import FileDownloadRoundedIcon from "@mui/icons-material/FileDownloadRounded";
-import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
+import { Box, Button, CircularProgress, Divider, Typography } from "@mui/material";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import PowerSettingsNewRoundedIcon from "@mui/icons-material/PowerSettingsNewRounded";
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
+
+// Add component imports
+import AgendaList from "./meetingLiveAdmin/AdminLiveAgendaList";
+import PropositionPane from "./meetingLiveAdmin/AdminLivePropositionPane";
+import LiveMonitorOverview from "./meetingLiveAdmin/AdminLiveMonitorOverview";
 
 import {
     useStartMeetingMutation,
@@ -34,44 +16,55 @@ import {
     useGetVotationsByPropositionQuery
 } from "../../../../Redux/meetingsApi.ts";
 import { useMeetingChannel } from "../../../../realTime/useMeetingChannel.ts";
-import {useStartVoteAndCreateVotationMutation, useStopVotationMutation} from "../../../../Redux/votationApi.ts";
-import { useGetVotationResultsQuery } from "../../../../Redux/voteApi.ts";
 import type { MeetingDto } from "../../../../domain/meetings.ts";
 import type { AgendaItemFull } from "../../../../domain/agenda.ts";
+import { useStartVoteAndCreateVotationMutation, useStopVotationMutation, useGetOpenVotationsByMeetingIdQuery } from "../../../../Redux/votationApi.ts";
+import type {PropositionDto} from "../../../../domain/propositions.ts";
 
 type MeetingLiveAdminCoreProps = {
     meeting: MeetingDto;
-    agenda: AgendaItemFull[];
+    agendaList: AgendaItemFull[];
 };
 
-export default function MeetingLiveAdminCore({ meeting, agenda }: MeetingLiveAdminCoreProps) {
+export default function MeetingLiveAdminCore({ meeting, agendaList }: MeetingLiveAdminCoreProps) {
     const navigate = useNavigate();
 
     // Start SignalR subscription now that meeting exists
     useMeetingChannel(meeting.id);
 
     // Selection state: choose agenda item first, then proposition
-    // Default to -1 meaning nothing selected yet — user should explicitly pick an agenda then a proposition
-    const [selectedAgendaIndex, setSelectedAgendaIndex] = useState<number>(-1);
-    const [selectedPropIndex, setSelectedPropIndex] = useState<number>(-1);
+    // Use object-based selections instead of indices
+    const [selectedAgenda, setSelectedAgenda] = useState<AgendaItemFull | null>(null);
+    const [selectedProposition, setSelectedProposition] = useState<PropositionDto | null>(null);
+
+    // New: control visibility of results/minutes panel (kept for quick preview)
+    const [showResults, setShowResults] = useState<boolean>(false);
 
     // prefixed setters are unused placeholders to avoid lint warnings until wired up
     const [attendance, _setAttendance] = useState({ present: 0, registered: 0 });
 
     const [startMeeting, { isLoading: isStartingMeeting }] = useStartMeetingMutation();
     const [stopMeeting, { isLoading: isStoppingMeeting }] = useStopMeetingMutation();
-    
-    const [startVoteAndCreateVotation, { isLoading: isOpeningVote }] = useStartVoteAndCreateVotationMutation();
-    const [stopVotation, { isLoading: isClosingVote }] = useStopVotationMutation();
+
+    // Hooks for starting/stopping votations — provide these to the proposition pane so it can call them
+    const [startVoteAndCreateVotationHook, { isLoading: isOpeningVote }] = useStartVoteAndCreateVotationMutation();
+    const [stopVotationHook, { isLoading: isClosingVote }] = useStopVotationMutation();
+
+    // simple wrapper functions for the pane — keep mutations local to this parent
+    const startVote = (propositionId: string) => {
+        if (!meeting) return;
+        startVoteAndCreateVotationHook({ meetingId: meeting.id, propositionId });
+    };
+
+    const stopVotation = (propositionId: string) => {
+        stopVotationHook(propositionId);
+    };
 
     useEffect(() => {
-        setSelectedAgendaIndex(-1);
-        setSelectedPropIndex(-1);
-    }, [meeting.id, agenda]);
+        setSelectedAgenda(null);
+        setSelectedProposition(null);
+    }, [meeting.id, agendaList]);
 
-
-    const selectedAgenda = agenda[selectedAgendaIndex] ?? null;
-    const selectedProposition = selectedAgenda?.propositions?.[selectedPropIndex] ?? null;
 
     // Fetch votations for the selected proposition
     const { data: votations } = useGetVotationsByPropositionQuery(
@@ -80,42 +73,13 @@ export default function MeetingLiveAdminCore({ meeting, agenda }: MeetingLiveAdm
     );
 
     // Check if there's an open votation for the selected proposition
-    const hasOpenVotation = votations?.some(v => v.open) ?? false;
     const openVotation = votations?.find(v => v.open);
-
-    // Fetch vote results for the open votation
-    const { data: voteResults } = useGetVotationResultsQuery(
-        openVotation?.id ?? "",
-        { 
-            skip: !openVotation?.id,
-            pollingInterval: 5000 // Poll every 5 seconds for live updates
-        }
-    );
+    
+    // Also fetch all open votations for the meeting so we can disable opening on other propositions
+    const { data: openVotationsForMeeting } = useGetOpenVotationsByMeetingIdQuery(meeting.id);
+    const hasAnyOpenVotation = (openVotationsForMeeting?.length ?? 0) > 0;
 
     const goBack = () => navigate(-1);
-
-    const handleOpenVote = () => {
-        if (selectedProposition) {
-            startVoteAndCreateVotation({ meetingId: meeting.id, propositionId: selectedProposition.id });
-        }
-    };
-
-    const handleCloseVote = () => {
-        if (openVotation && selectedProposition && openVotation.propositionId === selectedProposition.id) {
-            stopVotation(selectedProposition.id);
-        }
-    };
-
-    // Navigate propositions within current agenda
-    const handleNextVote = () => {
-        if (!selectedAgenda) return;
-        setSelectedPropIndex((i) =>
-            Math.min((selectedAgenda.propositions?.length ?? 1) - 1, i + 1)
-        );
-    };
-
-    const handlePrevVote = () =>
-        setSelectedPropIndex((i) => Math.max(0, i - 1));
 
     const handleFinalizeResults = () => {
         // TODO: finalize/export results for minutes
@@ -196,315 +160,61 @@ export default function MeetingLiveAdminCore({ meeting, agenda }: MeetingLiveAdm
             </Box>
             <Divider />
 
-            {/* Content */}
+            {/* Content - now with 3 locked parts: top-left Agenda, top-right Propositions, bottom Live Monitor + Overview */}
             <Box className="px-4 md:px-6 py-6">
-                <Box className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {/* LEFT: Voting controls */}
-                    <Box>
-                        <Card elevation={1} className="rounded-2xl">
-                            <CardHeader
-                                title="Afstemnings håndtering"
-                                sx={{
-                                    pb: 1,
-                                    "& .MuiCardHeader-title": { fontWeight: 700 },
-                                }}
-                            />
-                            <CardContent className="pt-2">
-                                <Typography
-                                    variant="overline"
-                                    color="text.secondary"
-                                    className="tracking-wider"
-                                >
-                                    Agenda items
-                                </Typography>
+                {/* TOP - fixed height, two columns that scroll internally */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '360px 1fr' }, gap: 16, height: '48vh' }}>
+                    <AgendaList
+                        agenda={agendaList}
+                        selectedAgenda={selectedAgenda}
+                        onSelectAgenda={(a) => {
+                            setSelectedAgenda(a);
+                            setSelectedProposition((a?.propositions?.length ?? 0) > 0 ? a!.propositions[0] : null);
+                        }}
+                    />
 
-                                <Card
-                                    variant="outlined"
-                                    className="rounded-xl mb-3"
-                                    sx={{ borderStyle: "dashed" }}
-                                >
-                                    <List dense disablePadding>
-                                        {agenda.map((a: any, aIdx: number) => (
-                                            <React.Fragment key={a.id}>
-                                                <ListItem disablePadding>
-                                                    <ListItemButton
-                                                        selected={aIdx === selectedAgendaIndex}
-                                                        onClick={() => {
-                                                            setSelectedAgendaIndex(aIdx);
-                                                            setSelectedPropIndex(
-                                                                (a.propositions?.length ?? 0) > 0 ? 0 : -1
-                                                            );
-                                                        }}
-                                                        sx={{
-                                                            '&.Mui-selected': {
-                                                                bgcolor: (t) => t.palette.primary.light,
-                                                                borderLeft: (t) => `4px solid ${t.palette.primary.main}`,
-                                                                pl: 1.5,
-                                                                color: (t) => t.palette.primary.contrastText,
-                                                                boxShadow: 3,
-                                                            },
-                                                            '&.Mui-selected:hover': {
-                                                                bgcolor: (t) => t.palette.primary.light,
-                                                            },
-                                                        }}
-                                                    >
-                                                        <ListItemText
-                                                            primary={<Typography fontWeight={600}>{a.title}</Typography>}
-                                                            secondary={
-                                                                a.description ? (
-                                                                    <Typography variant="body2" color="text.secondary">
-                                                                        {a.description}
-                                                                    </Typography>
-                                                                ) : undefined
-                                                            }
-                                                        />
-                                                    </ListItemButton>
-                                                </ListItem>
-                                                {aIdx < agenda.length - 1 && <Divider component="li" />}
-                                            </React.Fragment>
-                                        ))}
-                                    </List>
-                                </Card>
+                    <PropositionPane
+                         selectedAgenda={selectedAgenda}
+                         selectedProposition={selectedProposition}
+                         setSelectedProposition={setSelectedProposition}
+                         showResults={showResults}
+                         setShowResults={setShowResults}
+                         stopVotation={stopVotation}
+                         hasOpenVotation={hasAnyOpenVotation}
+                         openVotation={openVotation}
+                         handleStartReVote={handleStartReVote}
+                         isOpeningVote={isOpeningVote}
+                         isClosingVote={isClosingVote}
+                         startVote={startVote}
+                      />
+                 </Box>
 
-                                <Typography
-                                    variant="overline"
-                                    color="text.secondary"
-                                    className="tracking-wider"
-                                >
-                                    Propositions
-                                </Typography>
+                {/* BOTTOM - Live monitor + meeting overview combined; fixed height and internal scrolling if needed */}
+                <Box sx={{ mt: 3, height: '44vh' }}>
+                    <LiveMonitorOverview
+                        meeting={meeting}
+                        selectedProposition={selectedProposition}
+                        selectedAgenda={selectedAgenda}
+                        setSelectedProposition={setSelectedProposition}
+                        showResults={showResults}
+                        setShowResults={setShowResults}
+                        startVote={startVote}
+                        stopVotation={stopVotation}
+                        openVotation={openVotation}
+                        hasOpenVotation={hasAnyOpenVotation}
+                        attendance={attendance}
+                        handleStartMeeting={handleStartMeeting}
+                        handleStopMeeting={handleStopMeeting}
+                        isStartingMeeting={isStartingMeeting}
+                        isStoppingMeeting={isStoppingMeeting}
+                        handleFinalizeResults={handleFinalizeResults}
+                        handleStartReVote={handleStartReVote}
+                        isOpeningVote={isOpeningVote}
+                        isClosingVote={isClosingVote}
+                    />
 
-                                <Card variant="outlined" className="rounded-xl">
-                                    <List dense disablePadding>
-                                        {(selectedAgenda?.propositions ?? []).map((p: any, pIdx: number) => (
-                                            <React.Fragment key={p.id}>
-                                                <ListItem disablePadding>
-                                                    <ListItemButton
-                                                        selected={pIdx === selectedPropIndex}
-                                                        onClick={() => setSelectedPropIndex(pIdx)}
-                                                        sx={{
-                                                            '&.Mui-selected': {
-                                                                bgcolor: (t) => t.palette.primary.light,
-                                                                borderLeft: (t) => `4px solid ${t.palette.primary.main}`,
-                                                                pl: 1.5,
-                                                                color: (t) => t.palette.primary.contrastText,
-                                                                boxShadow: 3,
-                                                            },
-                                                            '&.Mui-selected:hover': {
-                                                                bgcolor: (t) => t.palette.primary.light,
-                                                            },
-                                                        }}
-                                                    >
-                                                        <ListItemText
-                                                            primary={<Typography fontWeight={600}>{p.question}</Typography>}
-                                                            secondary={
-                                                                p.voteType ? (
-                                                                    <Typography variant="body2" color="text.secondary">
-                                                                        {p.voteType}
-                                                                    </Typography>
-                                                                ) : undefined
-                                                            }
-                                                        />
-                                                    </ListItemButton>
-                                                </ListItem>
-                                                {pIdx <
-                                                    (selectedAgenda?.propositions?.length ?? 1) - 1 && (
-                                                        <Divider component="li" />
-                                                    )}
-                                            </React.Fragment>
-                                        ))}
-                                    </List>
-                                </Card>
-
-                                {/* Controls */}
-                                <Box className="mt-4 grid grid-cols-2 gap-2">
-                                    <Button
-                                        variant="contained"
-                                        startIcon={isOpeningVote ? <CircularProgress size={20} color="inherit" /> : <PlayArrowRoundedIcon />}
-                                        disabled={!selectedProposition || hasOpenVotation || isOpeningVote || isClosingVote}
-                                        onClick={handleOpenVote}
-                                    >
-                                        {isOpeningVote ? "Opening..." : "Open vote"}
-                                    </Button>
-                                    <Button
-                                        variant="outlined"
-                                        startIcon={isClosingVote ? <CircularProgress size={20} color="inherit" /> : <StopRoundedIcon />}
-                                        disabled={!selectedProposition || !hasOpenVotation || isOpeningVote || isClosingVote}
-                                        onClick={handleCloseVote}
-                                    >
-                                        {isClosingVote ? "Closing..." : "Close vote"}
-                                    </Button>
-
-                                    <Button
-                                        variant="text"
-                                        startIcon={<NavigateBeforeRoundedIcon />}
-                                        disabled={selectedPropIndex <= 0}
-                                        onClick={handlePrevVote}
-                                    >
-                                        Previous
-                                    </Button>
-                                    <Button
-                                        variant="text"
-                                        endIcon={<NavigateNextRoundedIcon />}
-                                        disabled={
-                                            selectedPropIndex < 0 ||
-                                            selectedPropIndex >=
-                                            (selectedAgenda?.propositions?.length ?? 1) - 1
-                                        }
-                                        onClick={handleNextVote}
-                                    >
-                                        Next
-                                    </Button>
-                                </Box>
-                                
-                                {/* Re-vote */}
-                                <Box className="mt-4">
-                                    <Button
-                                        variant="outlined"
-                                        color="secondary"
-                                        fullWidth
-                                        startIcon={<ReplayRoundedIcon />}
-                                        disabled
-                                        onClick={handleStartReVote}
-                                    >
-                                        Start re-vote
-                                    </Button>
-                                </Box>
-
-                            </CardContent>
-                        </Card>
-                    </Box>
-
-                    {/* MIDDLE: Live monitor */}
-                    <Box>
-                        <Card elevation={1} className="rounded-2xl">
-                            <CardHeader
-                                title="Live monitor"
-                                action={
-                                    <Chip
-                                        size="small"
-                                        color="default"
-                                        label="Idle"
-                                        variant="outlined"
-                                    />
-                                }
-                                sx={{ pb: 1, "& .MuiCardHeader-title": { fontWeight: 700 } }}
-                            />
-                            <CardContent className="pt-2">
-                                <Box className="flex items-center gap-2 mb-2">
-                                    <Typography variant="body2" color="text.secondary">
-                                        Attendance:
-                                    </Typography>
-                                    <Chip label={`Present: ${attendance.present}`} size="small" />
-                                    <Chip label={`Registered: ${attendance.registered}`} size="small" />
-                                </Box>
-
-                                <Divider className="my-2" />
-
-                                <Box className="space-y-1">
-                                    <Typography variant="body2" color="text.secondary">
-                                        Vote progress:
-                                    </Typography>
-                                    <Typography variant="h6" fontWeight={800}>
-                                        {voteResults?.totalVotes ?? 0} votes cast
-                                    </Typography>
-                                    
-                                    {voteResults && voteResults.results.length > 0 && (
-                                        <Box className="mt-3 space-y-2">
-                                            {voteResults.results.map((result) => (
-                                                <Box key={result.voteOptionId} className="flex items-center justify-between">
-                                                    <Typography variant="body2" fontWeight={600}>
-                                                        {result.label}:
-                                                    </Typography>
-                                                    <Chip 
-                                                        label={result.count} 
-                                                        size="small" 
-                                                        color={result.count > 0 ? "primary" : "default"}
-                                                    />
-                                                </Box>
-                                            ))}
-                                        </Box>
-                                    )}
-                                    
-                                    {!voteResults && openVotation && (
-                                        <Typography variant="caption" color="text.secondary">
-                                            Loading results...
-                                        </Typography>
-                                    )}
-                                    
-                                    {!openVotation && (
-                                        <Typography variant="caption" color="text.secondary">
-                                            No active votation
-                                        </Typography>
-                                    )}
-                                </Box>
-
-                                <Box className="mt-4">
-                                    <Button
-                                        variant="contained"
-                                        startIcon={<PictureInPictureAltRoundedIcon />}
-                                        disabled
-                                    >
-                                        Show live audience view
-                                    </Button>
-                                </Box>
-                            </CardContent>
-                        </Card>
-                    </Box>
-
-                    {/* RIGHT: Results & minutes */}
-                    <Box>
-                        <Card elevation={1} className="rounded-2xl">
-                            <CardHeader
-                                title="Results & minutes"
-                                sx={{ pb: 1, "& .MuiCardHeader-title": { fontWeight: 700 } }}
-                            />
-                            <CardContent className="pt-2">
-                                <Typography variant="body2" color="text.secondary">
-                                    Selected vote:
-                                </Typography>
-                                <Typography className="mt-1" fontWeight={600}>
-                                    {selectedProposition ? selectedProposition.question : "—"}
-                                </Typography>
-
-                                <Box className="flex flex-wrap gap-1.5 mt-2">
-                                    <Box className="w-full sm:w-auto">
-                                        <Button
-                                            variant="contained"
-                                            color="primary"
-                                            startIcon={<SaveRoundedIcon />}
-                                            disabled
-                                            onClick={handleFinalizeResults}
-                                        >
-                                            Finalize for minutes
-                                        </Button>
-                                    </Box>
-                                    <Box className="w-full sm:w-auto">
-                                        <Button
-                                            variant="outlined"
-                                            startIcon={<FileDownloadRoundedIcon />}
-                                            disabled
-                                        >
-                                            Export CSV
-                                        </Button>
-                                    </Box>
-                                    <Box className="w-full sm:w-auto">
-                                        <Button
-                                            variant="outlined"
-                                            startIcon={<VisibilityRoundedIcon />}
-                                            disabled
-                                        >
-                                            Show audience results
-                                        </Button>
-                                    </Box>
-                                </Box>
-                            </CardContent>
-                        </Card>
-                    </Box>
                 </Box>
-
             </Box>
         </Box>
     );
 }
-

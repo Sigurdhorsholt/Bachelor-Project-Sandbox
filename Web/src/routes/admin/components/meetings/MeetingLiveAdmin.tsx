@@ -15,5 +15,5 @@ export default function MeetingLiveAdmin() {
         return <FullScreenLoader message={"Loading meeting data"} submessage={"Redirecting when meeting is ready"}/>;
     }
 
-    return <MeetingLiveAdminCore meeting={meeting} agenda={agenda} />;
+    return <MeetingLiveAdminCore meeting={meeting} agendaList={agenda} />;
 }
