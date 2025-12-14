@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using WebApi.Realtime;
 using WebApi.DTOs;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace WebApi.Controllers;
 
@@ -39,7 +40,7 @@ public class MeetingsController : ControllerBase
     // GET: /api/meetings/{id}
     // Returns only meeting metadata (no nested agenda/propositions)
     [HttpGet("{id:guid}")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOrAttendee")]
     public async Task<IActionResult> GetMeetingById(Guid id)
     {
         var m = await _db.Meetings
@@ -236,5 +237,19 @@ public class MeetingsController : ControllerBase
         };
 
         return Ok(meetingMetaDto);
+    }
+
+    // Debug endpoint to inspect current user's claims/roles
+    [HttpGet("debug/claims")]
+    [Authorize]
+    public IActionResult DebugClaims()
+    {
+        var isAuthenticated = User?.Identity?.IsAuthenticated ?? false;
+        var authType = User?.Identity?.AuthenticationType;
+        var name = User?.Identity?.Name;
+        var claims = User?.Claims.Select(c => new { c.Type, c.Value }).ToList() ?? [];
+        var roles = User?.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList() ?? new List<string>();
+
+        return Ok(new { isAuthenticated, authType, name, roles, claims });
     }
 }

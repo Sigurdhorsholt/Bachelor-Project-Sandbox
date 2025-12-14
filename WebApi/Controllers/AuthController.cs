@@ -94,8 +94,8 @@ public class AuthController : ControllerBase
             return Unauthorized(new { error = "Invalid or already used access code" });
         }
 
-        ticket.Used = true;
-        await _db.SaveChangesAsync(ct);
+        //ticket.Used = true;
+        //await _db.SaveChangesAsync(ct);
 
         var token = IssueAttendeeJwt(meeting.Id, ticket.Id, ticket.Code, TimeSpan.FromHours(4));
         var expires = DateTime.UtcNow.AddHours(4);
@@ -134,7 +134,9 @@ public class AuthController : ControllerBase
             new("meetingId", meetingId.ToString()),
             new("ticketId", ticketId.ToString()),
             new("ticketCode", ticketCode),
-            new(ClaimTypes.Role, "Attendee")
+            new(ClaimTypes.Role, "Attendee"),
+            // Also emit the standard JWT "role" claim so external clients and middleware that look for "role" see it.
+            new("role", "Attendee")
         };
 
         var jwt = new JwtSecurityToken(

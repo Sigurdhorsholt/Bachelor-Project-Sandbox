@@ -8,9 +8,9 @@ using WebApi.Infrastructure;
 using WebApi.Realtime;
 using MediatR;
 using Application.Agendas.Queries.GetAgenda;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc.Authorization;
 using System.Text.Json;
+using System.Security.Claims;
+using System.Linq;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,7 +43,10 @@ builder.Services
             ValidateAudience = true,
             ValidAudiences = new[] { "admin", "attendee" },
             ValidateIssuerSigningKey = true, IssuerSigningKey = signingKey,
-            ValidateLifetime = true, ClockSkew = TimeSpan.FromMinutes(1)
+            ValidateLifetime = true, ClockSkew = TimeSpan.FromMinutes(1),
+            // Ensure the JWT role/name mapping is explicit so ClaimTypes.Role is used by policies
+            RoleClaimType = ClaimTypes.Role,
+            NameClaimType = ClaimTypes.Name
         };
 
         o.Events = new JwtBearerEvents
@@ -55,6 +58,48 @@ builder.Services
                 if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hub/meetings"))
                 {
                     context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                // Normalize common role claim formats into ClaimTypes.Role so RequireRole works reliably.
+                var identity = context.Principal?.Identity as ClaimsIdentity;
+                if (identity != null)
+                {
+                    // collect role-like claims: 'role', 'roles', and the ClaimTypes.Role itself
+                    var roleValues = identity.FindAll("role").Select(c => c.Value).ToList();
+                    roleValues.AddRange(identity.FindAll("roles").Select(c => c.Value));
+
+                    // If roles are provided as a JSON array in a single claim value (e.g. "[\"Attendee\"]"), try to parse
+                    for (int i = 0; i < roleValues.Count; i++)
+                    {
+                        var v = roleValues[i];
+                        if (!string.IsNullOrWhiteSpace(v) && v.TrimStart().StartsWith("["))
+                        {
+                            try
+                            {
+                                var parsed = JsonSerializer.Deserialize<string[]>(v);
+                                if (parsed != null)
+                                {
+                                    // replace this entry with parsed entries
+                                    roleValues.RemoveAt(i);
+                                    roleValues.InsertRange(i, parsed);
+                                    i += parsed.Length - 1;
+                                }
+                            }
+                            catch { /* ignore parse errors */ }
+                        }
+                    }
+
+                    foreach (var rv in roleValues.Distinct())
+                    {
+                        if (!identity.HasClaim(ClaimTypes.Role, rv))
+                        {
+                            identity.AddClaim(new Claim(ClaimTypes.Role, rv));
+                        }
+                    }
                 }
 
                 return Task.CompletedTask;
@@ -71,7 +116,14 @@ builder.Services.AddAuthorization(options =>
 
     options.AddPolicy("AdminOnly", policy =>
     {
-        policy.RequireRole("Admin");
+        // Token in your example contains the role claim value "Administrator".
+        // Accept both common variants here so existing tokens and any newer ones work.
+        policy.RequireRole("Admin", "Administrator");
+    });
+    
+    options.AddPolicy("AdminOrAttendee", policy =>
+    {
+        policy.RequireRole("Admin", "Administrator", "Attendee");
     });
 });
 

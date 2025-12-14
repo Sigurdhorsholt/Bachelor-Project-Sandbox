@@ -90,7 +90,6 @@ export default function MeetingsTable({
                             <TableCell>Titel</TableCell>
                             <TableCell className="hidden sm:table-cell">Start</TableCell>
                             <TableCell>Status</TableCell>
-                            <TableCell align="right">Handlinger</TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
@@ -110,12 +109,7 @@ export default function MeetingsTable({
                                 </TableCell>
                                 <TableCell className="hidden sm:table-cell">{fmt(m.startsAt)}</TableCell>
                                 <TableCell><Chip size="small" label={m.status} variant="outlined" /></TableCell>
-                                <TableCell align="right">
-                                    <div className="flex justify-end gap-2">
-                                        <Button size="small" variant="text" className="!rounded-lg" disabled>Rediger</Button>
-                                        <Button size="small" variant="text" className="!rounded-lg" disabled>Åbn</Button>
-                                    </div>
-                                </TableCell>
+                             
                             </TableRow>
                         ))}
                         {meetings.length === 0 && (
