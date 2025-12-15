@@ -167,4 +167,89 @@ public class VotationController : ControllerBase
         return Ok(votations);
     }
     
+    // GET: /api/votation/results/{votationId}
+    [HttpGet("results/{votationId:guid}")]
+    [AllowAnonymous] // TEMP: allow anonymous for debugging; remove/restore AdminOnly policy after testing
+    public async Task<IActionResult> GetVotationResults(Guid votationId)
+    {
+        var votation = await _db.Votations
+            .Include(v => v.Proposition!)
+                .ThenInclude(p => p.Options!)
+            .FirstOrDefaultAsync(v => v.Id == votationId);
+
+        if (votation == null)
+        {
+            return NotFound("Votation not found.");
+        }
+
+        var proposition = votation.Proposition;
+        if (proposition == null)
+        {
+            return NotFound("Proposition not found for this votation.");
+        }
+
+        // Get all ballots for this votation with vote options
+        var ballots = await _db.Ballots
+            .Include(b => b.VoteOption)
+            .Where(b => b.VotationId == votationId)
+            .ToListAsync();
+
+        var results = proposition.Options.Select(opt => new
+        {
+            VoteOptionId = opt.Id,
+            opt.Label,
+            Count = ballots.Count(b => b.VoteOptionId == opt.Id)
+        }).ToList();
+
+        return Ok(new
+        {
+            VotationId = votation.Id,
+            PropositionId = votation.PropositionId,
+            Question = proposition.Question,
+            TotalVotes = ballots.Count,
+            Results = results,
+            Open = votation.Open,
+            StartedAt = votation.StartedAtUtc,
+            EndedAt = votation.EndedAtUtc
+        });
+    }
+
+    // POST: /api/votation/revote/{propositionId}
+    [HttpPost("revote/{propositionId:guid}")]
+    public async Task<IActionResult> StartReVote(Guid propositionId)
+    {
+        // Find the latest votation for the given proposition (by StartedAtUtc descending)
+        var latest = await _db.Votations
+            .AsTracking() // ensure EF Core will track and persist our change
+            .Where(v => v.PropositionId == propositionId)
+            .OrderByDescending(v => v.StartedAtUtc)
+            .FirstOrDefaultAsync();
+        
+        var existingVotations = await _db.Votations
+            .Where(v => v.PropositionId == propositionId && v.Open && !v.Overwritten)
+            .ToListAsync();
+        
+        foreach (var v in existingVotations)
+        {
+            v.Overwritten = true;
+            v.Open = false;
+            v.EndedAtUtc = DateTime.UtcNow;
+        }
+
+        await _db.SaveChangesAsync();
+
+        // If we closed an open votation, broadcast that it stopped so realtime clients update
+        if (latest != null && !latest.Open)
+        {
+            await _broadcast.MeetingVotationStopped(
+                latest.MeetingId.ToString(),
+                latest.PropositionId.ToString(),
+                latest.Id.ToString(),
+                latest.EndedAtUtc ?? DateTime.UtcNow
+            );
+        }
+
+        return Ok();
+    }
+
 }

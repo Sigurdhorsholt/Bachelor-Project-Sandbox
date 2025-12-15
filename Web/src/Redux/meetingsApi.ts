@@ -4,7 +4,7 @@ import type {
     PublicMeetingMeta
 } from "../domain/meetings";
 import type {AgendaItemDto, AgendaItemFull} from "../domain/agenda";
-import type { PropositionDto } from "../domain/propositions";
+import type { PropositionDto, VotationDto } from "../domain/propositions";
 import type { VoteOptionDto } from "../domain/voteOptions";
 import type { AccessStateDto } from "../domain/access";
 import type { TicketDto } from "../domain/tickets";
@@ -75,6 +75,17 @@ export const meetingsApi = api.injectEndpoints({
                             id: o.id ?? o.Id,
                             label: o.label ?? o.Label ?? "",
                         })),
+                        // map latest votation (backend returns single LatestVotation / latestVotation)
+                        latestVotation: (p.latestVotation ?? p.LatestVotation) ? {
+                            id: (p.latestVotation ?? p.LatestVotation).id ?? (p.latestVotation ?? p.LatestVotation).Id,
+                            meetingId: (p.latestVotation ?? p.LatestVotation).meetingId ?? (p.latestVotation ?? p.LatestVotation).MeetingId,
+                            propositionId: (p.latestVotation ?? p.LatestVotation).propositionId ?? (p.latestVotation ?? p.LatestVotation).PropositionId,
+                            startedAtUtc: (p.latestVotation ?? p.LatestVotation).startedAtUtc ?? (p.latestVotation ?? p.LatestVotation).StartedAtUtc ?? null,
+                            endedAtUtc: (p.latestVotation ?? p.LatestVotation).endedAtUtc ?? (p.latestVotation ?? p.LatestVotation).EndedAtUtc ?? null,
+                            open: (p.latestVotation ?? p.LatestVotation).open ?? (p.latestVotation ?? p.LatestVotation).Open ?? false,
+                            overwritten: (p.latestVotation ?? p.LatestVotation).overwritten ?? (p.latestVotation ?? p.LatestVotation).Overwritten ?? false,
+                        } : undefined,
+                        isOpen: (p.isOpen ?? p.IsOpen) ?? false,
                     })),
                 })),
         }),
@@ -98,6 +109,16 @@ export const meetingsApi = api.injectEndpoints({
                         id: o.id ?? o.Id,
                         label: o.label ?? o.Label ?? "",
                     })),
+                    latestVotation: (p.latestVotation ?? p.LatestVotation) ? {
+                        id: (p.latestVotation ?? p.LatestVotation).id ?? (p.latestVotation ?? p.LatestVotation).Id,
+                        meetingId: (p.latestVotation ?? p.LatestVotation).meetingId ?? (p.latestVotation ?? p.LatestVotation).MeetingId,
+                        propositionId: (p.latestVotation ?? p.LatestVotation).propositionId ?? (p.latestVotation ?? p.LatestVotation).PropositionId,
+                        startedAtUtc: (p.latestVotation ?? p.LatestVotation).startedAtUtc ?? (p.latestVotation ?? p.LatestVotation).StartedAtUtc ?? null,
+                        endedAtUtc: (p.latestVotation ?? p.LatestVotation).endedAtUtc ?? (p.latestVotation ?? p.LatestVotation).EndedAtUtc ?? null,
+                        open: (p.latestVotation ?? p.LatestVotation).open ?? (p.latestVotation ?? p.LatestVotation).Open ?? false,
+                        overwritten: (p.latestVotation ?? p.LatestVotation).overwritten ?? (p.latestVotation ?? p.LatestVotation).Overwritten ?? false,
+                    } : undefined,
+                    isOpen: (p.isOpen ?? p.IsOpen) ?? false,
                 })),
         }),
 
@@ -105,6 +126,20 @@ export const meetingsApi = api.injectEndpoints({
         getVotationsByProposition: b.query<any[], { meetingId: string; propositionId: string }>({
             query: ({ meetingId, propositionId }) => `/votation/by-proposition/${meetingId}/${propositionId}`,
             providesTags: (_r, _e, { propositionId }) => [{ type: "Votations", id: propositionId }],
+            transformResponse: (raw: any) => {
+                // backend returns PascalCase fields (Id, MeetingId, PropositionId, StartedAtUtc, EndedAtUtc, Open, Overwritten)
+                // Normalize to camelCase used across the frontend
+                if (!Array.isArray(raw)) return [];
+                return raw.map((v: any) => ({
+                    id: v.id ?? v.Id,
+                    meetingId: v.meetingId ?? v.MeetingId,
+                    propositionId: v.propositionId ?? v.PropositionId,
+                    startedAtUtc: v.startedAtUtc ?? v.StartedAtUtc ?? null,
+                    endedAtUtc: v.endedAtUtc ?? v.EndedAtUtc ?? null,
+                    open: v.open ?? v.Open ?? false,
+                    overwritten: v.overwritten ?? v.Overwritten ?? false,
+                }));
+            }
         }),
 
         getMeetingPublic: b.query<PublicMeetingMeta, string>({
@@ -148,6 +183,16 @@ export const meetingsApi = api.injectEndpoints({
                         id: p.id,
                         question: p.question ?? p.Question ?? p.title ?? p.Title,
                         voteType: p.voteType ?? p.VoteType ?? "YesNoBlank",
+                        latestVotation: (p.latestVotation ?? p.LatestVotation) ? {
+                            id: (p.latestVotation ?? p.LatestVotation).id ?? (p.latestVotation ?? p.LatestVotation).Id,
+                            meetingId: (p.latestVotation ?? p.LatestVotation).meetingId ?? (p.latestVotation ?? p.LatestVotation).MeetingId,
+                            propositionId: (p.latestVotation ?? p.LatestVotation).propositionId ?? (p.latestVotation ?? p.LatestVotation).PropositionId,
+                            startedAtUtc: (p.latestVotation ?? p.LatestVotation).startedAtUtc ?? (p.latestVotation ?? p.LatestVotation).StartedAtUtc ?? null,
+                            endedAtUtc: (p.latestVotation ?? p.LatestVotation).endedAtUtc ?? (p.latestVotation ?? p.LatestVotation).EndedAtUtc ?? null,
+                            open: (p.latestVotation ?? p.LatestVotation).open ?? (p.latestVotation ?? p.LatestVotation).Open ?? false,
+                            overwritten: (p.latestVotation ?? p.LatestVotation).overwritten ?? (p.latestVotation ?? p.LatestVotation).Overwritten ?? false,
+                        } : undefined,
+                        isOpen: (p.isOpen ?? p.IsOpen) ?? false,
                     }))
                 }))
             }),

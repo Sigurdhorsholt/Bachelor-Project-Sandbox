@@ -54,8 +54,6 @@ export const VotePanel: React.FC<Props> = ({ meetingId, proposition, votationId,
             }
             
             const result = await castVote(vote).unwrap();
-
-            console.log("Vote cast successfully:", result);
         } catch (err) {
             console.error("Failed to cast vote:", err);
         }

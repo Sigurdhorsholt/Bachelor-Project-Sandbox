@@ -23,7 +23,6 @@ export default function MeetingLiveTestCard({ meetingId: propId }: Props) {
         // skip: !meetingId, // uncomment if your route can briefly have no id
     });
 
-    console.log("MeetingLiveTestCard render:", { meetingId, data });
 
     const status = data?.started ?? 0;
     const title = data?.title ?? meetingId;

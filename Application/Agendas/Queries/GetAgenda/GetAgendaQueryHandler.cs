@@ -1,7 +1,7 @@
-﻿
-using MediatR;
+﻿using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Application.Persistence;
+using System.Linq;
 
 namespace Application.Agendas.Queries.GetAgenda;
 
@@ -13,7 +13,7 @@ public record PropositionDto(
     string Question,
     string VoteType,
     List<VoteOptionDto> VoteOptions,
-    List<VotationDto> Votations,
+    VotationDto? LatestVotation,
     bool IsOpen
 );
 public record VoteOptionDto(Guid Id, string Label);
@@ -64,8 +64,10 @@ public class GetAgendaQueryHandler : IRequestHandler<GetAgendaQuery, GetAgendaRe
                     p.Question,
                     p.VoteType,
                     p.Options.Select(o => new VoteOptionDto(o.Id, o.Label)).ToList(),
+                    // Select only the latest votation: order by StartedAtUtc desc, then EndedAtUtc desc
                     p.Votations
-                        .Where(v => v.MeetingId == request.MeetingId && v.PropositionId == p.Id)
+                        .OrderByDescending(v => v.StartedAtUtc)
+                        .ThenByDescending(v => v.EndedAtUtc)
                         .Select(v => new VotationDto(
                             v.Id,
                             v.MeetingId,
@@ -75,8 +77,13 @@ public class GetAgendaQueryHandler : IRequestHandler<GetAgendaQuery, GetAgendaRe
                             v.Open,
                             v.Overwritten
                         ))
-                        .ToList(),
-                    p.Votations.Any(v => v.Open)
+                        .FirstOrDefault(),
+                    // IsOpen should reflect the latest votation if present
+                    p.Votations
+                        .OrderByDescending(v => v.StartedAtUtc)
+                        .ThenByDescending(v => v.EndedAtUtc)
+                        .Select(v => v.Open)
+                        .FirstOrDefault()
                 )).ToList()
             ))
             .ToListAsync(cancellationToken);

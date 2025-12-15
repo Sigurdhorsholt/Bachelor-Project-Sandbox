@@ -20,6 +20,7 @@ import type { MeetingDto } from "../../../../domain/meetings.ts";
 import type { AgendaItemFull } from "../../../../domain/agenda.ts";
 import { useStartVoteAndCreateVotationMutation, useStopVotationMutation, useGetOpenVotationsByMeetingIdQuery } from "../../../../Redux/votationApi.ts";
 import type {PropositionDto} from "../../../../domain/propositions.ts";
+import { useStartReVoteMutation } from "../../../../Redux/votationApi.ts";
 
 type MeetingLiveAdminCoreProps = {
     meeting: MeetingDto;
@@ -34,14 +35,13 @@ export default function MeetingLiveAdminCore({ meeting, agendaList }: MeetingLiv
 
     // Selection state: choose agenda item first, then proposition
     // Use object-based selections instead of indices
-    const [selectedAgenda, setSelectedAgenda] = useState<AgendaItemFull | null>(null);
-    const [selectedProposition, setSelectedProposition] = useState<PropositionDto | null>(null);
+    const [selectedAgenda, setSelectedAgenda] = useState<AgendaItemFull | undefined>(undefined);
+    const [selectedProposition, setSelectedProposition] = useState<PropositionDto | undefined>(undefined);
 
     // New: control visibility of results/minutes panel (kept for quick preview)
     const [showResults, setShowResults] = useState<boolean>(false);
 
     // prefixed setters are unused placeholders to avoid lint warnings until wired up
-    const [attendance, _setAttendance] = useState({ present: 0, registered: 0 });
 
     const [startMeeting, { isLoading: isStartingMeeting }] = useStartMeetingMutation();
     const [stopMeeting, { isLoading: isStoppingMeeting }] = useStopMeetingMutation();
@@ -49,10 +49,12 @@ export default function MeetingLiveAdminCore({ meeting, agendaList }: MeetingLiv
     // Hooks for starting/stopping votations — provide these to the proposition pane so it can call them
     const [startVoteAndCreateVotationHook, { isLoading: isOpeningVote }] = useStartVoteAndCreateVotationMutation();
     const [stopVotationHook, { isLoading: isClosingVote }] = useStopVotationMutation();
+    const [startReVoteHook, { isLoading: isRevoting }] = useStartReVoteMutation();
 
     // simple wrapper functions for the pane — keep mutations local to this parent
     const startVote = (propositionId: string) => {
         if (!meeting) return;
+        // fire-and-forget: caller may await if needed
         startVoteAndCreateVotationHook({ meetingId: meeting.id, propositionId });
     };
 
@@ -61,8 +63,8 @@ export default function MeetingLiveAdminCore({ meeting, agendaList }: MeetingLiv
     };
 
     useEffect(() => {
-        setSelectedAgenda(null);
-        setSelectedProposition(null);
+        setSelectedAgenda(undefined);
+        setSelectedProposition(undefined);
     }, [meeting.id, agendaList]);
 
 
@@ -72,8 +74,18 @@ export default function MeetingLiveAdminCore({ meeting, agendaList }: MeetingLiv
         { skip: !selectedProposition }
     );
 
-    // Check if there's an open votation for the selected proposition
-    const openVotation = votations?.find(v => v.open);
+    // Prefer an open votation; if none exists, fall back to the latest votation (most recent) so the UI can request results
+    const openVotation = React.useMemo(() => {
+        if (!selectedProposition) return undefined;
+        if (Array.isArray(votations) && votations.length > 0) {
+            const open = votations.find(v => v.open);
+            if (open) return open;
+            // no open votation -> take the newest (first due to OrderByDescending on backend)
+            return votations[0];
+        }
+        // if backend provided latestVotation embedded on the proposition, use that as a fallback
+        return selectedProposition.latestVotation ?? undefined;
+    }, [votations, selectedProposition]);
     
     // Also fetch all open votations for the meeting so we can disable opening on other propositions
     const { data: openVotationsForMeeting } = useGetOpenVotationsByMeetingIdQuery(meeting.id);
@@ -85,8 +97,18 @@ export default function MeetingLiveAdminCore({ meeting, agendaList }: MeetingLiv
         // TODO: finalize/export results for minutes
     };
 
-    const handleStartReVote = () => {
-        // TODO: start a re-vote (allow hybrid paper inputs)
+    const handleStartReVote = async () => {
+        // Mark latest votation as overwritten (and close if open) on the server,
+        // then start a fresh votation when that completes successfully.
+        if (!selectedProposition) return;
+        try {
+            await startReVoteHook(selectedProposition.id).unwrap();
+            // now start a new votation for the same proposition
+            startVote(selectedProposition.id);
+        } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error("Revote failed:", err);
+        }
     };
 
 
@@ -169,7 +191,7 @@ export default function MeetingLiveAdminCore({ meeting, agendaList }: MeetingLiv
                         selectedAgenda={selectedAgenda}
                         onSelectAgenda={(a) => {
                             setSelectedAgenda(a);
-                            setSelectedProposition((a?.propositions?.length ?? 0) > 0 ? a!.propositions[0] : null);
+                            setSelectedProposition((a?.propositions?.length ?? 0) > 0 ? a!.propositions[0] : undefined);
                         }}
                     />
 
@@ -183,22 +205,21 @@ export default function MeetingLiveAdminCore({ meeting, agendaList }: MeetingLiv
                 {/* BOTTOM - Live monitor + meeting overview combined; fixed height and internal scrolling if needed */}
                 <Box sx={{ mt: 3, height: '44vh' }}>
                     <LiveMonitorOverview
-                        meeting={meeting}
-                        selectedProposition={selectedProposition}
-                        selectedAgenda={selectedAgenda}
-                        setSelectedProposition={setSelectedProposition}
-                        showResults={showResults}
-                        setShowResults={setShowResults}
-                        startVote={startVote}
-                        stopVotation={stopVotation}
-                        openVotation={openVotation}
-                        hasOpenVotation={hasAnyOpenVotation}
-                        attendance={attendance}
-                        handleFinalizeResults={handleFinalizeResults}
-                        handleStartReVote={handleStartReVote}
-                        isOpeningVote={isOpeningVote}
-                        isClosingVote={isClosingVote}
-                    />
+                         meeting={meeting}
+                         selectedProposition={selectedProposition}
+                         selectedAgenda={selectedAgenda}
+                         setSelectedProposition={setSelectedProposition}
+                         showResults={showResults}
+                         setShowResults={setShowResults}
+                         startVote={startVote}
+                         stopVotation={stopVotation}
+                         openVotation={openVotation}
+                         hasOpenVotation={hasAnyOpenVotation}
+                         handleFinalizeResults={handleFinalizeResults}
+                         handleStartReVote={handleStartReVote}
+                         isOpeningVote={isOpeningVote}
+                         isClosingVote={isClosingVote}
+                     />
 
                 </Box>
             </Box>

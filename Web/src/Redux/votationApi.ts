@@ -23,6 +23,40 @@ function toVotation(raw: any): VotationDto {
     };
 }
 
+// Results DTO for a single votation
+export type VotationResultsDto = {
+    votationId: string;
+    propositionId: string;
+    question: string;
+    totalVotes: number;
+    results: {
+        voteOptionId: string;
+        label: string;
+        count: number;
+    }[];
+    open: boolean;
+    startedAt?: string | null;
+    endedAt?: string | null;
+};
+
+function toVotationResults(raw: any): VotationResultsDto {
+    const resultsRaw = raw.results ?? raw.Results ?? [];
+    return {
+        votationId: raw.votationId ?? raw.VotationId ?? "",
+        propositionId: raw.propositionId ?? raw.PropositionId ?? "",
+        question: raw.question ?? raw.Question ?? "",
+        totalVotes: raw.totalVotes ?? raw.TotalVotes ?? 0,
+        results: Array.isArray(resultsRaw) ? resultsRaw.map((r: any) => ({
+            voteOptionId: r.voteOptionId ?? r.VoteOptionId ?? r.voteOptionId ?? r.VoteOptionId ?? "",
+            label: r.label ?? r.Label ?? "",
+            count: r.count ?? r.Count ?? 0,
+        })) : [],
+        open: raw.open ?? raw.Open ?? false,
+        startedAt: raw.startedAt ?? raw.StartedAt ?? raw.startedAtUtc ?? raw.StartedAtUtc ?? null,
+        endedAt: raw.endedAt ?? raw.EndedAt ?? raw.endedAtUtc ?? raw.EndedAtUtc ?? null,
+    };
+}
+
 export const votationApi = api.injectEndpoints({
     endpoints: (b) => ({
 
@@ -46,9 +80,18 @@ export const votationApi = api.injectEndpoints({
             ] : [],
         }),
 
+        // POST /api/votation/revote/{propositionId}
+        startReVote: b.mutation<void, string>({
+            query: (propositionId) => ({ url: `/votation/revote/${propositionId}`, method: "POST" }),
+            // no response body expected
+            invalidatesTags: (_result, _err, propositionId) => [
+                { type: "Votations" as const, id: propositionId }
+            ],
+        }),
+
         // GET /api/votation/{votationId}
         getVotation: b.query<VotationDto, string>({
-            query: (votationId) => `/votation/openVotes/${votationId}`,
+            query: (votationId) => `/votation/${votationId}`,
             transformResponse: (raw: any) => toVotation(raw),
             providesTags: (result, _err) => (result ? [{ type: "Meeting" as const, id: result.meetingId }] : []),
         }),
@@ -60,7 +103,14 @@ export const votationApi = api.injectEndpoints({
             providesTags: (result, _err, meetingId) => [{ type: "Meeting" as const, id: meetingId }],
         }),
 
+        // GET /api/votation/results/{votationId}
+        getVotationResults: b.query<VotationResultsDto, string>({
+            query: (votationId) => `/votation/results/${votationId}`,
+            transformResponse: (raw: any) => toVotationResults(raw),
+            providesTags: (result, _err, votationId) => [{ type: "Votations" as const, id: votationId }],
+        }),
+
     }),
 });
 
-export const { useStartVoteAndCreateVotationMutation, useStopVotationMutation, useGetVotationQuery, useGetOpenVotationsByMeetingIdQuery } = votationApi;
+export const { useStartVoteAndCreateVotationMutation, useStopVotationMutation, useGetVotationQuery, useGetOpenVotationsByMeetingIdQuery, useGetVotationResultsQuery, useStartReVoteMutation } = votationApi;

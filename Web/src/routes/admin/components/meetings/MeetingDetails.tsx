@@ -21,7 +21,7 @@ export default function MeetingDetails({
     };
 
     const goViewResults = () => {
-        console.log("Viewing results for meeting:", meeting.id);
+
     };
 
     const resultButtonDisabled = meeting.status !== "Finished";

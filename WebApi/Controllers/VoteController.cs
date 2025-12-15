@@ -12,7 +12,7 @@ namespace WebApi.Controllers;
 [Route("api/vote")]
 public class VoteController : ControllerBase
 {
-    private readonly AppDbContext _db;
+    private AppDbContext _db;
     private readonly IMeetingBroadcaster _broadcast;
     private readonly ILogger<VoteController> _logger;
 
@@ -38,146 +38,231 @@ public class VoteController : ControllerBase
             return BadRequest("Admission ticket code is required.");
         }
 
-        await using var tx = await _db.Database.BeginTransactionAsync();
+        // --- READ-ONLY VALIDATION PHASE (no transaction yet) ---
+        // Decide TESTCODE semantics: Option A chosen.
+        // Each request that supplies exactly "TESTCODE" will get a unique ticket
+        // with code "TESTCODE-{Guid}" scoped to the provided MeetingId. This
+        // ensures that each request generates a fresh ticket and therefore a
+        // new ballot will be created for test traffic.
+        var isTestRequest = request.Code == "TESTCODE";
+        var generatedTestTicketCode = (string?)null;
 
-        try
+        // Resolve the AdmissionTicket to use in write paths. For TESTCODE we create
+        // an in-memory ticket (persisted only when we start the write transaction).
+        // For real codes we look up the ticket now and return early if invalid.
+        AdmissionTicket ticketEntity;
+
+        if (isTestRequest)
         {
-            // Handle special TESTCODE for easier testing: find-or-create a ticket scoped to the meeting
-            AdmissionTicket? ticket;
-
-            if (request.Code == "TESTCODE")
+            generatedTestTicketCode = $"TESTCODE-{Guid.NewGuid():N}";
+            ticketEntity = new AdmissionTicket
             {
-                ticket = await _db.AdmissionTickets
-                    .Include(t => t.Meeting)
-                    .FirstOrDefaultAsync(t => t.Code == "TESTCODE" && t.MeetingId == request.MeetingId);
+                Id = Guid.NewGuid(),
+                MeetingId = request.MeetingId,
+                Code = generatedTestTicketCode,
+                Used = false
+            };
 
-                if (ticket == null)
-                {
-                    ticket = new AdmissionTicket
-                    {
-                        Id = Guid.NewGuid(),
-                        MeetingId = request.MeetingId,
-                        Code = "TESTCODE",
-                        Used = false
-                    };
+            _logger.LogInformation("[TestTicket] Generated ephemeral ticket {TicketCode} (Id: {TicketId}) for meeting {MeetingId}",
+                generatedTestTicketCode, ticketEntity.Id, request.MeetingId);
+        }
+        else
+        {
+            var dbTicket = await _db.AdmissionTickets
+                .Include(t => t.Meeting)
+                .FirstOrDefaultAsync(t => t.Code == request.Code);
 
-                    _db.AdmissionTickets.Add(ticket);
-                    await _db.SaveChangesAsync();
-                }
-            }
-            else
-            {
-                // 1. Validate admission ticket
-                ticket = await _db.AdmissionTickets
-                    .Include(t => t.Meeting)
-                    .FirstOrDefaultAsync(t => t.Code == request.Code);
-            }
-
-            if (ticket == null)
+            if (dbTicket == null)
             {
                 return NotFound("Invalid admission ticket code.");
             }
 
-            if (ticket.MeetingId != request.MeetingId)
+            if (dbTicket.MeetingId != request.MeetingId)
             {
                 return BadRequest("This admission ticket does not belong to the specified meeting.");
             }
 
-            // 2. Find the open votation for this proposition
-            var votation = await _db.Votations
-                .Include(v => v.Proposition)
-                .FirstOrDefaultAsync(v =>
-                    v.MeetingId == request.MeetingId &&
-                    v.PropositionId == request.PropositionId &&
-                    v.Open);
+            ticketEntity = dbTicket;
+        }
 
-            if (votation == null)
-            {
-                return NotFound("No open votation found for this proposition.");
-            }
+        // Find open votation for this proposition (read-only)
+        var votation = await _db.Votations
+            .Include(v => v.Proposition)
+            .FirstOrDefaultAsync(v =>
+                v.MeetingId == request.MeetingId &&
+                v.PropositionId == request.PropositionId &&
+                v.Open);
 
-            // 3. Validate vote option belongs to this proposition
-            var voteOption = await _db.VoteOptions
-                .FirstOrDefaultAsync(vo =>
-                    vo.Id == request.VoteOptionId &&
-                    vo.PropositionId == request.PropositionId);
+        if (votation == null)
+        {
+            return NotFound("No open votation found for this proposition.");
+        }
 
-            if (voteOption == null)
-            {
-                return BadRequest("Invalid vote option for this proposition.");
-            }
+        // Validate vote option belongs to this proposition (read-only)
+        var voteOption = await _db.VoteOptions
+            .FirstOrDefaultAsync(vo =>
+                vo.Id == request.VoteOptionId &&
+                vo.PropositionId == request.PropositionId);
 
-            // 4. CRITICAL: Check if this ticket has already voted in THIS votation
-            var existingBallot = await _db.Ballots
+        if (voteOption == null)
+        {
+            return BadRequest("Invalid vote option for this proposition.");
+        }
+
+        // Check whether this ticket has already voted in THIS votation (read-only).
+        // For TESTCODE requests we created a new in-memory ticket and therefore
+        // existingBallot will always be null which yields a create path.
+        Ballot? existingBallot = null;
+
+        if (!isTestRequest)
+        {
+            existingBallot = await _db.Ballots
                 .Include(b => b.Vote)
                     .ThenInclude(v => v.AuditableEvent)
                 .FirstOrDefaultAsync(b =>
-                    b.AdmissionTicketId == ticket.Id &&
+                    b.AdmissionTicketId == ticketEntity.Id &&
                     b.VotationId == votation.Id);
+        }
 
+        // --- WRITE PHASES (start transactions only when needed) ---
+        try
+        {
             if (existingBallot != null)
             {
-                // Vote already exists - UPDATE the ballot (change vote)
-                _logger.LogInformation(
-                    "Changing vote for ticket {TicketId} in votation {VotationId} from option {OldOption} to {NewOption}",
-                    ticket.Id, votation.Id, existingBallot.VoteOptionId, request.VoteOptionId);
+                // Update existing ballot - start transaction for atomic write
+                await using var tx = await _db.Database.BeginTransactionAsync();
+
+                // Capture old option before mutation for correct audit metadata
+                var oldOptionId = existingBallot.VoteOptionId;
 
                 existingBallot.VoteOptionId = request.VoteOptionId;
                 existingBallot.CastAtUtc = DateTime.UtcNow;
 
-                // Create new audit event for the change
-                var changeEvent = new AuditableEvent
-                {
-                    Id = Guid.NewGuid(),
-                    VoteId = existingBallot.Vote.Id,
-                    EventType = "VoteChanged",
-                    Metadata = $"Changed from option {existingBallot.VoteOptionId} to {request.VoteOptionId}",
-                    TimestampUtc = DateTime.UtcNow
-                };
+                var isTestCode = isTestRequest; // false for real tickets
 
-                _db.AuditableEvents.Add(changeEvent);
+                if (!isTestCode)
+                {
+                    // Create or update audit event for the change (only for non-test tickets)
+                    var existingEvent = existingBallot.Vote?.AuditableEvent;
+
+                    var metadata = $"Changed from option {oldOptionId} to {request.VoteOptionId}";
+
+                    if (existingEvent == null)
+                    {
+                        var changeEvent = new AuditableEvent
+                        {
+                            Id = Guid.NewGuid(),
+                            VoteId = existingBallot.Vote != null ? existingBallot.Vote.Id : Guid.Empty,
+                            EventType = "VoteChanged",
+                            Metadata = metadata,
+                            TimestampUtc = DateTime.UtcNow
+                        };
+
+                        _db.AuditableEvents.Add(changeEvent);
+                    }
+                    else
+                    {
+                        existingEvent.EventType = "VoteChanged";
+                        existingEvent.Metadata = metadata;
+                        existingEvent.TimestampUtc = DateTime.UtcNow;
+                        _db.AuditableEvents.Update(existingEvent);
+                    }
+                }
+
                 await _db.SaveChangesAsync();
                 await tx.CommitAsync();
 
+                _logger.LogInformation("[VoteUpdated] TicketId={TicketId} VotationId={VotationId} OldOption={OldOption} NewOption={NewOption} Commit=Completed",
+                    ticketEntity.Id, votation.Id, oldOptionId, request.VoteOptionId);
+
+                // Broadcast after commit
                 await _broadcast.VoteChanged(
                     request.MeetingId.ToString(),
                     request.PropositionId.ToString(),
-                    votation.Id.ToString()
-                );
+                    votation.Id.ToString());
 
                 return Ok(new
                 {
                     Message = "Vote updated successfully",
                     BallotId = existingBallot.Id,
-                    VoteId = existingBallot.Vote.Id,
+                    VoteId = existingBallot.Vote != null ? existingBallot.Vote.Id : (Guid?)null,
                     VotationId = votation.Id,
                     Action = "Updated"
                 });
             }
 
-            // 5. Create NEW ballot (first vote in this votation)
-            var ballot = new Ballot
-            {
-                Id = Guid.NewGuid(),
-                AdmissionTicketId = ticket.Id,
-                VotationId = votation.Id,
-                VoteOptionId = request.VoteOptionId,
-                CastAtUtc = DateTime.UtcNow
-            };
+            // No existing ballot -> create new ballot + vote. For TESTCODE we must
+            // ensure the generated ephemeral ticket is persisted as part of the
+            // same transaction that creates the ballot and vote.
+            await using var txCreate = await _db.Database.BeginTransactionAsync();
 
-            _db.Ballots.Add(ballot);
-
-            // 6. Create Vote wrapper
-            var vote = new Vote
+            // If this is a TEST request, persist the generated ticket now so the
+            // ballot will reference a real AdmissionTicket row.
+            if (isTestRequest)
             {
-                Id = Guid.NewGuid(),
+                _db.AdmissionTickets.Add(ticketEntity);
+            }
+
+            // Create ballot + vote (and audit event unless skipAudit)
+            var skipAudit = isTestRequest;
+            var (ballot, vote) = await CreateAndSaveVoteAsync(ticketEntity, votation, request.VoteOptionId, skipAudit);
+
+            await txCreate.CommitAsync();
+
+            _logger.LogInformation("[VoteCreated] TicketId={TicketId} VotationId={VotationId} BallotId={BallotId} VoteId={VoteId} Commit=Completed",
+                ticketEntity.Id, votation.Id, ballot.Id, vote.Id);
+
+            // Broadcast after commit
+            await _broadcast.VoteCast(
+                request.MeetingId.ToString(),
+                request.PropositionId.ToString(),
+                votation.Id.ToString());
+
+            return Ok(new
+            {
+                Message = "Vote cast successfully",
                 BallotId = ballot.Id,
-                CreatedAtUtc = DateTime.UtcNow
-            };
+                VoteId = vote.Id,
+                VotationId = votation.Id,
+                Action = "Created",
+                // For test requests, include the ephemeral ticket code so callers can inspect it if needed
+                TestTicketCode = isTestRequest ? generatedTestTicketCode : null
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error casting vote for meeting {MeetingId}, proposition {PropositionId}",
+                request.MeetingId, request.PropositionId);
+            // Do not return raw exception details to client
+            return StatusCode(500, "An error occurred while casting the vote.");
+        }
+    }
 
-            _db.Votes.Add(vote);
+    // Helper: create ballot + vote, optionally create an auditable event (skipped for test tickets)
+    private async Task<(Ballot, Vote)> CreateAndSaveVoteAsync(AdmissionTicket ticket, Votation votation, Guid voteOptionId, bool skipAudit)
+    {
+        var ballot = new Ballot
+        {
+            Id = Guid.NewGuid(),
+            AdmissionTicketId = ticket.Id,
+            VotationId = votation.Id,
+            VoteOptionId = voteOptionId,
+            CastAtUtc = DateTime.UtcNow
+        };
 
-            // 7. Create audit event
+        _db.Ballots.Add(ballot);
+
+        var vote = new Vote
+        {
+            Id = Guid.NewGuid(),
+            BallotId = ballot.Id,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+
+        _db.Votes.Add(vote);
+
+        if (!skipAudit)
+        {
             var auditEvent = new AuditableEvent
             {
                 Id = Guid.NewGuid(),
@@ -188,43 +273,18 @@ public class VoteController : ControllerBase
             };
 
             _db.AuditableEvents.Add(auditEvent);
-
-            // 8. Mark ticket as used (if not already)
-            if (!ticket.Used)
-            {
-                ticket.Used = true;
-            }
-
-            await _db.SaveChangesAsync();
-            await tx.CommitAsync();
-
-            _logger.LogInformation(
-                "Vote cast successfully for ticket {TicketId} in votation {VotationId}",
-                ticket.Id, votation.Id);
-
-            // Broadcast vote cast event
-            await _broadcast.VoteCast(
-                request.MeetingId.ToString(),
-                request.PropositionId.ToString(),
-                votation.Id.ToString()
-            );
-
-            return Ok(new
-            {
-                Message = "Vote cast successfully",
-                BallotId = ballot.Id,
-                VoteId = vote.Id,
-                VotationId = votation.Id,
-                Action = "Created"
-            });
         }
-        catch (Exception ex)
+
+        // Mark ticket as used (if not already)
+        if (!ticket.Used)
         {
-            await tx.RollbackAsync();
-            _logger.LogError(ex, "Error casting vote for meeting {MeetingId}, proposition {PropositionId}",
-                request.MeetingId, request.PropositionId);
-            return StatusCode(500, "An error occurred while casting the vote.");
+            ticket.Used = true;
         }
+
+        // Save everything within the caller's transaction
+        await _db.SaveChangesAsync();
+
+        return (ballot, vote);
     }
 
     /// <summary>
@@ -287,29 +347,28 @@ public class VoteController : ControllerBase
 
         if (code == "TESTCODE")
         {
-            // Scope TESTCODE to the votation's meeting
+            // Scope TESTCODE to the votation's meeting and generate a unique test ticket per request
             var votation = await _db.Votations.FirstOrDefaultAsync(v => v.Id == votationId);
             if (votation == null)
             {
                 return NotFound("Votation not found.");
             }
 
-            ticket = await _db.AdmissionTickets
-                .FirstOrDefaultAsync(t => t.Code == "TESTCODE" && t.MeetingId == votation.MeetingId);
-
-            if (ticket == null)
+            // Option A: create a unique TESTCODE-{Guid} ticket per request and persist it.
+            var generatedCode = $"TESTCODE-{Guid.NewGuid():N}";
+            ticket = new AdmissionTicket
             {
-                ticket = new AdmissionTicket
-                {
-                    Id = Guid.NewGuid(),
-                    MeetingId = votation.MeetingId,
-                    Code = "TESTCODE",
-                    Used = false
-                };
+                Id = Guid.NewGuid(),
+                MeetingId = votation.MeetingId,
+                Code = generatedCode,
+                Used = false
+            };
 
-                _db.AdmissionTickets.Add(ticket);
-                await _db.SaveChangesAsync();
-            }
+            _db.AdmissionTickets.Add(ticket);
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation("[CheckIfVoted][TestTicket] Persisted ephemeral test ticket {TicketCode} (Id: {TicketId}) for meeting {MeetingId}",
+                generatedCode, ticket.Id, votation.MeetingId);
         }
         else
         {
@@ -408,17 +467,28 @@ public class VoteController : ControllerBase
             }
 
             // Create revocation audit event before deleting
-            var revocationEvent = new AuditableEvent
+            var existingEvent = ballot.Vote?.AuditableEvent;
+            if (existingEvent == null)
             {
-                Id = Guid.NewGuid(),
-                VoteId = ballot.Vote.Id,
-                EventType = "VoteRevoked",
-                Metadata = $"Vote revoked by admin at {DateTime.UtcNow}",
-                TimestampUtc = DateTime.UtcNow
-            };
+                var revocationEvent = new AuditableEvent
+                {
+                    Id = Guid.NewGuid(),
+                    VoteId = ballot.Vote.Id,
+                    EventType = "VoteRevoked",
+                    Metadata = $"Vote revoked by admin at {DateTime.UtcNow}",
+                    TimestampUtc = DateTime.UtcNow
+                };
 
-            _db.AuditableEvents.Add(revocationEvent);
-            await _db.SaveChangesAsync();
+                _db.AuditableEvents.Add(revocationEvent);
+            }
+            else
+            {
+                existingEvent.EventType = "VoteRevoked";
+                existingEvent.Metadata = $"Vote revoked by admin at {DateTime.UtcNow}";
+                existingEvent.TimestampUtc = DateTime.UtcNow;
+                _db.AuditableEvents.Update(existingEvent);
+            }
+             await _db.SaveChangesAsync();
 
             // Delete cascade will handle Vote and AuditableEvents
             _db.Ballots.Remove(ballot);

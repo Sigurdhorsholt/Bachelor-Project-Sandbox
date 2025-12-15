@@ -15,7 +15,6 @@ import type {MeetingDto, MeetingStatusName} from "../../domain/meetings.ts";
 /* ===================== Component ===================== */
 
 export const MeetingAttendeeDashboard: React.FC = () => {
-    console.log("Rendering MeetingAttendeeDashboard");
     const meetingId = useRouteMeetingId();
     useMeetingChannel(meetingId); // invalidates/refetches on push
     const dispatch = useDispatch();
@@ -44,16 +43,10 @@ export const MeetingAttendeeDashboard: React.FC = () => {
     );
 
     const logout = () => {
-        console.log("logging out as attendee")
         dispatch(clearAttendeeAuth());
         navigate("/");
     };
     
-    useEffect(() => {
-        console.log("votationData", votationData)
-    }, [votationData]);
-
-
     return (
         <Box
             className="bg-gradient-to-b from-white to-slate-50"
