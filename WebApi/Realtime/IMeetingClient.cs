@@ -48,3 +48,4 @@ namespace WebApi.Realtime
     public record ParticipantJoinedDto(string MeetingId, string ConnectionId, string? Summary);
     public record ParticipantLeftDto(string MeetingId, string ConnectionId, string? Summary);
 
+}

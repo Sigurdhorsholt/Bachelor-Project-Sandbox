@@ -177,15 +177,6 @@ export default function MeetingLiveAdminCore({ meeting, agendaList }: MeetingLiv
                          selectedAgenda={selectedAgenda}
                          selectedProposition={selectedProposition}
                          setSelectedProposition={setSelectedProposition}
-                         showResults={showResults}
-                         setShowResults={setShowResults}
-                         stopVotation={stopVotation}
-                         hasOpenVotation={hasAnyOpenVotation}
-                         openVotation={openVotation}
-                         handleStartReVote={handleStartReVote}
-                         isOpeningVote={isOpeningVote}
-                         isClosingVote={isClosingVote}
-                         startVote={startVote}
                       />
                  </Box>
 
@@ -203,10 +194,6 @@ export default function MeetingLiveAdminCore({ meeting, agendaList }: MeetingLiv
                         openVotation={openVotation}
                         hasOpenVotation={hasAnyOpenVotation}
                         attendance={attendance}
-                        handleStartMeeting={handleStartMeeting}
-                        handleStopMeeting={handleStopMeeting}
-                        isStartingMeeting={isStartingMeeting}
-                        isStoppingMeeting={isStoppingMeeting}
                         handleFinalizeResults={handleFinalizeResults}
                         handleStartReVote={handleStartReVote}
                         isOpeningVote={isOpeningVote}
