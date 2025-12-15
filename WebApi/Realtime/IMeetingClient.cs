@@ -24,7 +24,6 @@ namespace WebApi.Realtime
         Task VoteChanged(VoteChangedDto dto);
 
         // Presence events (added for explicit presence contract)
-        Task ParticipantCountUpdated(ParticipantCountDto dto);
         Task ParticipantJoined(ParticipantJoinedDto dto);
         Task ParticipantLeft(ParticipantLeftDto dto);
     }
@@ -44,8 +43,8 @@ namespace WebApi.Realtime
     public record VoteChangedDto(string MeetingId, string PropositionId, string VotationId);
 
     // Presence DTOs
-    public record ParticipantCountDto(string MeetingId, int Count);
-    public record ParticipantJoinedDto(string MeetingId, string ConnectionId, string? Summary);
-    public record ParticipantLeftDto(string MeetingId, string ConnectionId, string? Summary);
+    // Include current participant count so admins can show live counts
+    public record ParticipantJoinedDto(string MeetingId, string ConnectionId, string? Summary, int Count);
+    public record ParticipantLeftDto(string MeetingId, string ConnectionId, string? Summary, int Count);
 
 }

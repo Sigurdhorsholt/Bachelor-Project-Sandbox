@@ -365,6 +365,37 @@ export function useMeetingChannel(meetingId?: string, onStateChanged?: () => voi
                 { type: "Votations", id: dtoVotationId }
             ]));
         });
+
+        // Presence events: ParticipantJoined / ParticipantLeft
+        connection.on("ParticipantJoined", (dto: any) => {
+            console.debug("[useMeetingChannel] received ParticipantJoined", dto);
+            if (dto == null) {
+                return;
+            }
+
+            const dtoMeetingId = dto.meetingId ?? (dto as any).MeetingId;
+            if (dtoMeetingId !== meetingId) {
+                return;
+            }
+
+            // Invalidate the Meeting tag so UI (including admin view) refreshes participant info
+            dispatch(meetingsApi.util.invalidateTags([{ type: "Meeting", id: meetingId }]));
+        });
+
+        connection.on("ParticipantLeft", (dto: any) => {
+            console.debug("[useMeetingChannel] received ParticipantLeft", dto);
+            if (dto == null) {
+                return;
+            }
+
+            const dtoMeetingId = dto.meetingId ?? (dto as any).MeetingId;
+            if (dtoMeetingId !== meetingId) {
+                return;
+            }
+
+            // Invalidate the Meeting tag so UI (including admin view) refreshes participant info
+            dispatch(meetingsApi.util.invalidateTags([{ type: "Meeting", id: meetingId }]));
+        });
     }
 
 }
