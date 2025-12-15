@@ -1,4 +1,4 @@
-﻿﻿using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 
 namespace WebApi.Realtime
 {
@@ -22,6 +22,11 @@ namespace WebApi.Realtime
         
         Task VoteCast(VoteCastDto dto);
         Task VoteChanged(VoteChangedDto dto);
+
+        // Presence events (added for explicit presence contract)
+        Task ParticipantCountUpdated(ParticipantCountDto dto);
+        Task ParticipantJoined(ParticipantJoinedDto dto);
+        Task ParticipantLeft(ParticipantLeftDto dto);
     }
     
     // Tiny DTOs for clarity & evolvability
@@ -38,5 +43,8 @@ namespace WebApi.Realtime
     public record VoteCastDto(string MeetingId, string PropositionId, string VotationId);
     public record VoteChangedDto(string MeetingId, string PropositionId, string VotationId);
 
-}
+    // Presence DTOs
+    public record ParticipantCountDto(string MeetingId, int Count);
+    public record ParticipantJoinedDto(string MeetingId, string ConnectionId, string? Summary);
+    public record ParticipantLeftDto(string MeetingId, string ConnectionId, string? Summary);
 
