@@ -42,10 +42,36 @@ public class VoteController : ControllerBase
 
         try
         {
-            // 1. Validate admission ticket
-            var ticket = await _db.AdmissionTickets
-                .Include(t => t.Meeting)
-                .FirstOrDefaultAsync(t => t.Code == request.Code);
+            // Handle special TESTCODE for easier testing: find-or-create a ticket scoped to the meeting
+            AdmissionTicket? ticket;
+
+            if (request.Code == "TESTCODE")
+            {
+                ticket = await _db.AdmissionTickets
+                    .Include(t => t.Meeting)
+                    .FirstOrDefaultAsync(t => t.Code == "TESTCODE" && t.MeetingId == request.MeetingId);
+
+                if (ticket == null)
+                {
+                    ticket = new AdmissionTicket
+                    {
+                        Id = Guid.NewGuid(),
+                        MeetingId = request.MeetingId,
+                        Code = "TESTCODE",
+                        Used = false
+                    };
+
+                    _db.AdmissionTickets.Add(ticket);
+                    await _db.SaveChangesAsync();
+                }
+            }
+            else
+            {
+                // 1. Validate admission ticket
+                ticket = await _db.AdmissionTickets
+                    .Include(t => t.Meeting)
+                    .FirstOrDefaultAsync(t => t.Code == request.Code);
+            }
 
             if (ticket == null)
             {
@@ -257,19 +283,50 @@ public class VoteController : ControllerBase
     [Authorize(Policy = "AttendeeOnly")]
     public async Task<IActionResult> CheckIfVoted(string code, Guid votationId)
     {
-        var ticket = await _db.AdmissionTickets
-            .FirstOrDefaultAsync(t => t.Code == code);
+        AdmissionTicket? ticket;
 
-        if (ticket == null)
+        if (code == "TESTCODE")
         {
-            return NotFound("Invalid admission ticket code.");
+            // Scope TESTCODE to the votation's meeting
+            var votation = await _db.Votations.FirstOrDefaultAsync(v => v.Id == votationId);
+            if (votation == null)
+            {
+                return NotFound("Votation not found.");
+            }
+
+            ticket = await _db.AdmissionTickets
+                .FirstOrDefaultAsync(t => t.Code == "TESTCODE" && t.MeetingId == votation.MeetingId);
+
+            if (ticket == null)
+            {
+                ticket = new AdmissionTicket
+                {
+                    Id = Guid.NewGuid(),
+                    MeetingId = votation.MeetingId,
+                    Code = "TESTCODE",
+                    Used = false
+                };
+
+                _db.AdmissionTickets.Add(ticket);
+                await _db.SaveChangesAsync();
+            }
+        }
+        else
+        {
+            ticket = await _db.AdmissionTickets
+                .FirstOrDefaultAsync(t => t.Code == code);
+
+            if (ticket == null)
+            {
+                return NotFound("Invalid admission ticket code.");
+            }
         }
 
         var ballot = await _db.Ballots
-            .Include(b => b.VoteOption)
-            .FirstOrDefaultAsync(b =>
-                b.AdmissionTicketId == ticket.Id &&
-                b.VotationId == votationId);
+             .Include(b => b.VoteOption)
+             .FirstOrDefaultAsync(b =>
+                 b.AdmissionTicketId == ticket.Id &&
+                 b.VotationId == votationId);
 
         if (ballot == null)
         {
@@ -314,9 +371,9 @@ public class VoteController : ControllerBase
                 VotationId = b.VotationId,
                 PropositionId = b.Votation!.PropositionId,
                 VoteOptionId = b.VoteOptionId,
-                VoteOptionLabel = b.VoteOption.Label,
+                VoteOptionLabel = b.VoteOption != null ? b.VoteOption.Label : null,
                 CastAt = b.CastAtUtc,
-                EventType = b.Vote.AuditableEvent.EventType
+                EventType = b.Vote != null && b.Vote.AuditableEvent != null ? b.Vote.AuditableEvent.EventType : null
             })
             .ToListAsync();
 
