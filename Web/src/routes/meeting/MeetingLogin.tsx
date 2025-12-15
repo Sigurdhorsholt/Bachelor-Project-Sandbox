@@ -17,7 +17,7 @@ import type { RootState } from "../../Redux/store";
 
 export default function MeetingLogin() {
     const { id: meetingCode } = useParams<{ id: string }>();
-    const [accessCode, setAccessCode] = useState("TZL56J4D");
+    const [accessCode, setAccessCode] = useState("TESTCODE");
     const [attendeeLogin, { isLoading, error }] = useAttendeeLoginMutation();
     const dispatch = useDispatch();
     const nav = useNavigate();
@@ -42,7 +42,6 @@ export default function MeetingLogin() {
                 ticketId: result.ticketId,
                 ticketCode: accessCode.trim(),
             }));
-            console.log("lol s", meetingCode);
         } catch (err) {
             console.error("Attendee login failed:", err);
         }
@@ -51,8 +50,6 @@ export default function MeetingLogin() {
     // Delay navigation until attendeeAuth is set
     useEffect(() => {
         if (attendeeAuth.accessToken && attendeeAuth.meetingId) {
-            console.log("going to", meetingCode);
-
             nav(`/meeting/${attendeeAuth.meetingId}/live`, { replace: true });
         }
     }, [attendeeAuth.accessToken, attendeeAuth.meetingId, nav]);

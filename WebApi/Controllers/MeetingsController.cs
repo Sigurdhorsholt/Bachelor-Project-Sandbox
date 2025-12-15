@@ -11,12 +11,12 @@ using Microsoft.Extensions.Logging;
 using WebApi.Realtime;
 using WebApi.DTOs;
 using Microsoft.AspNetCore.Authorization;
+using System.Security.Claims;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/meetings")]
-[Authorize]
 public class MeetingsController : ControllerBase
 {
     private AppDbContext _db;
@@ -40,13 +40,17 @@ public class MeetingsController : ControllerBase
     // GET: /api/meetings/{id}
     // Returns only meeting metadata (no nested agenda/propositions)
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = "AdminOrAttendee")]
     public async Task<IActionResult> GetMeetingById(Guid id)
     {
         var m = await _db.Meetings
             .AsNoTracking()
             .FirstOrDefaultAsync(x => x.Id == id);
-        if (m is null) return NotFound();
-        
+        if (m is null)
+        {
+            return NotFound();
+        }
+
         return Ok(new
         {
             m.Id,
@@ -59,35 +63,33 @@ public class MeetingsController : ControllerBase
         });
     }
 
-    public class UpdateMeetingRequest
-    {
-        public string? Title { get; set; }
-        public DateTime? StartsAtUtc { get; set; }
-
-        [JsonConverter(typeof(JsonStringEnumConverter))]
-        public MeetingStatus? Status { get; set; }
-
-        // ask backend to regenerate meeting code and persist it
-        public bool? RegenerateMeetingCode { get; set; }
-    }
-
     // PATCH: /api/meetings/{id}
     [HttpPatch("{id:guid}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Patch(Guid id, [FromBody] UpdateMeetingRequest req)
     {
         var meeting = await _db.Meetings
             .Include(x => x.AgendaItems).ThenInclude(a => a.Propositions)
             .AsTracking()
             .FirstOrDefaultAsync(x => x.Id == id);
-        if (meeting == null) return NotFound();
+        if (meeting == null)
+        {
+            return NotFound();
+        }
 
         if (meeting.Status == MeetingStatus.Finished)
+        {
             return Conflict("Finished meetings cannot be edited.");
+        }
 
         if (req.Title is not null)
         {
             var t = req.Title.Trim();
-            if (t.Length == 0) return BadRequest("Title cannot be empty.");
+            if (t.Length == 0)
+            {
+                return BadRequest("Title cannot be empty.");
+            }
+
             meeting.Title = t;
         }
 
@@ -98,7 +100,9 @@ public class MeetingsController : ControllerBase
         }
 
         if (req.Status is not null)
+        {
             meeting.Status = req.Status.Value;
+        }
 
         if (req.RegenerateMeetingCode == true)
         {
@@ -110,7 +114,7 @@ public class MeetingsController : ControllerBase
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to regenerate meeting code for {MeetingId}", id);
-                return StatusCode(500, "Failed to generate meeting code: " + ex.Message);
+                return StatusCode(500, "Failed to generate meeting code");
             }
         }
 
@@ -143,6 +147,7 @@ public class MeetingsController : ControllerBase
 
 
     [HttpPost("{id}/start")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> StartMeeting(string id, CancellationToken cancellationToken)
     {
         var meeting = await _db.Meetings
@@ -173,6 +178,7 @@ public class MeetingsController : ControllerBase
 
 
     [HttpPost("{id}/stop")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> StopMeeting(string id, CancellationToken cancellationToken)
     {
         var meeting = await _db.Meetings
@@ -203,15 +209,22 @@ public class MeetingsController : ControllerBase
 
     // GET: /api/meetings/meta?id={meetingCode}
     [HttpGet("meta")]
+    [Authorize(Policy = "AttendeeOnly")]
     public async Task<IActionResult> GetMeetingMeta([FromQuery] string meetingId, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(meetingId)) return BadRequest("Meeting code is required.");
+        if (string.IsNullOrWhiteSpace(meetingId))
+        {
+            return BadRequest("Meeting code is required.");
+        }
 
         var meeting = await _db.Meetings
             .AsNoTracking()
             .FirstOrDefaultAsync(m => m.Id.ToString() == meetingId, cancellationToken);
 
-        if (meeting == null) return null;
+        if (meeting == null)
+        {
+            return NotFound();
+        }
 
         var meetingMetaDto = new MeetingMetaDto
         {
@@ -224,5 +237,19 @@ public class MeetingsController : ControllerBase
         };
 
         return Ok(meetingMetaDto);
+    }
+
+    // Debug endpoint to inspect current user's claims/roles
+    [HttpGet("debug/claims")]
+    [Authorize]
+    public IActionResult DebugClaims()
+    {
+        var isAuthenticated = User?.Identity?.IsAuthenticated ?? false;
+        var authType = User?.Identity?.AuthenticationType;
+        var name = User?.Identity?.Name;
+        var claims = User?.Claims.Select(c => new { c.Type, c.Value }).ToList() ?? [];
+        var roles = User?.FindAll(ClaimTypes.Role).Select(c => c.Value).ToList() ?? new List<string>();
+
+        return Ok(new { isAuthenticated, authType, name, roles, claims });
     }
 }

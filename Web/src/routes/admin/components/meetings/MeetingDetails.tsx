@@ -21,7 +21,7 @@ export default function MeetingDetails({
     };
 
     const goViewResults = () => {
-        console.log("Viewing results for meeting:", meeting.id);
+
     };
 
     const resultButtonDisabled = meeting.status !== "Finished";
@@ -46,7 +46,7 @@ export default function MeetingDetails({
             </div>
             <Box className="mt-4 flex flex-wrap gap-2">
                 <Button variant="contained" disableElevation className="!rounded-lg" onClick={goEdit}>
-                    Åben Møde
+                    Rediger Møde
                 </Button>
                 <Button variant="outlined" className="!rounded-lg" disabled={resultButtonDisabled}
                         onClick={goViewResults}>
@@ -54,7 +54,7 @@ export default function MeetingDetails({
                 </Button>
                 <Button variant="outlined" className="!rounded-lg" disabled={startButtonDisabled}
                         onClick={goStartMeeting}>
-                    Start møde
+                    Åben Live møde
                 </Button>
             </Box>
         </Paper>

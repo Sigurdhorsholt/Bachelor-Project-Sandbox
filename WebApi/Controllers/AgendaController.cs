@@ -6,19 +6,19 @@ using Application.Agendas.Commands.CreateAgendaItem;
 using Application.Agendas.Commands.UpdateAgendaItem;
 using Application.Agendas.Commands.DeleteAgendaItem;
 using Microsoft.AspNetCore.Authorization;
+using WebApi.DTOs;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/meetings/{meetingId:guid}/agenda")]
-[Authorize]
 public class AgendaController : ControllerBase
 {
     private readonly IMediator _mediator;
     public AgendaController(IMediator mediator) => _mediator = mediator;
 
-  
     [HttpGet]
+    [Authorize]
     public async Task<IActionResult> GetAgenda(Guid meetingId, [FromQuery] bool includePropositions = false)
     {
         try
@@ -38,10 +38,9 @@ public class AgendaController : ControllerBase
         }
     }
 
-    public record CreateAgendaItemRequest(string Title, string? Description);
-
     // POST: /api/meetings/{meetingId}/agenda
     [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Create(Guid meetingId, [FromBody] CreateAgendaItemRequest req)
     {
         try
@@ -63,10 +62,9 @@ public class AgendaController : ControllerBase
         }
     }
 
-    public record UpdateAgendaItemRequest(string? Title, string? Description);
-
     // PATCH: /api/meetings/{meetingId}/agenda/{itemId}
     [HttpPatch("{itemId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Update(Guid meetingId, Guid itemId, [FromBody] UpdateAgendaItemRequest req)
     {
         try
@@ -76,7 +74,11 @@ public class AgendaController : ControllerBase
         }
         catch (KeyNotFoundException ex)
         {
-            if (ex.Message.Contains("Agenda item")) return NotFound();
+            if (ex.Message.Contains("Agenda item"))
+            {
+                return NotFound();
+            }
+
             return NotFound(ex.Message);
         }
         catch (ArgumentException ex)
@@ -91,6 +93,7 @@ public class AgendaController : ControllerBase
 
     // DELETE: /api/meetings/{meetingId}/agenda/{itemId}
     [HttpDelete("{itemId:guid}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Delete(Guid meetingId, Guid itemId)
     {
         try
@@ -100,7 +103,11 @@ public class AgendaController : ControllerBase
         }
         catch (KeyNotFoundException ex)
         {
-            if (ex.Message.Contains("Agenda item")) return NotFound();
+            if (ex.Message.Contains("Agenda item"))
+            {
+                return NotFound();
+            }
+
             return NotFound(ex.Message);
         }
         catch (InvalidOperationException ex)

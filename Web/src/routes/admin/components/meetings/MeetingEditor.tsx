@@ -48,7 +48,6 @@ export default function MeetingEditor() {
     // Fetch full meeting (agenda + propositions)
    // const {data: meeting, isFetching, isError, refetch} = useGetMeetingFullQuery(meetingIdParam, {skip: !id});
 
-    console.log("MeetingEditor rendering for meetingIdParam:", id);
     const { data: meeting, isFetching: meetingIsFetching, isError: meetingIsError} = useGetMeetingQuery(id, {skip: !id});
     const { data: agendaItems } = useGetAgendaQuery(id, {skip: !id});
 

@@ -11,12 +11,12 @@ using Application.Organisations.Queries.GetDivisions;
 using Application.Organisations.Commands.CreateOrganisation;
 using Application.Organisations.Commands.CreateDivision;
 using Microsoft.AspNetCore.Authorization;
+using WebApi.DTOs;
 
 namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/organisations")]
-[Authorize]
 public class OrganisationsController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -30,6 +30,7 @@ public class OrganisationsController : ControllerBase
 
     // GET: /api/organisations
     [HttpGet]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> GetAll()
     {
         var orgs = await _mediator.Send(new GetAllOrganisationsQuery());
@@ -38,6 +39,7 @@ public class OrganisationsController : ControllerBase
 
     // GET: /api/organisations/{id}
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> GetById(Guid id)
     {
         try
@@ -59,6 +61,7 @@ public class OrganisationsController : ControllerBase
 
     // POST: /api/organisations
     [HttpPost]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Create([FromBody] CreateOrganisationRequest request)
     {
         try
@@ -75,6 +78,7 @@ public class OrganisationsController : ControllerBase
 
     // GET: /api/organisations/{orgId}/divisions
     [HttpGet("{orgId:guid}/divisions")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> GetDivisions(Guid orgId)
     {
         try
@@ -90,6 +94,7 @@ public class OrganisationsController : ControllerBase
 
     // POST: /api/organisations/{orgId}/divisions
     [HttpPost("{orgId:guid}/divisions")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> CreateDivision(Guid orgId, [FromBody] CreateDivisionRequest request)
     {
         try
@@ -107,6 +112,3 @@ public class OrganisationsController : ControllerBase
         }
     }
 }
-
-public record CreateOrganisationRequest(string Name);
-public record CreateDivisionRequest(string Name);

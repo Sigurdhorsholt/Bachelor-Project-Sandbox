@@ -1,0 +1,14 @@
+﻿{
+  "name": "signalr-client-simulator",
+  "version": "1.0.0",
+  "description": "Simple simulator that opens multiple SignalR connections with Attendee JWTs",
+  "main": "simulate.js",
+  "scripts": {
+    "start": "node simulate.js"
+  },
+  "dependencies": {
+    "@microsoft/signalr": "^7.0.5",
+    "jsonwebtoken": "^9.0.0"
+  }
+}
+

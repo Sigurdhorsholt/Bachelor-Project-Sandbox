@@ -4,6 +4,7 @@ using Application.Persistence;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 
 namespace WebApi.Realtime;
 
@@ -13,6 +14,12 @@ public class MeetingHub : Hub<IMeetingClient>
 {
     private readonly ILogger<MeetingHub> _logger;
     private readonly AppDbContext _dbContext;
+
+    // In-memory presence tracking:
+    // meetingId -> (connectionId -> userName)
+    private static readonly ConcurrentDictionary<string, ConcurrentDictionary<string, string?>> _meetingParticipants = new();
+    // connectionId -> (meetingId -> byte) — used to find meetings for a disconnected connection
+    private static readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _connectionMeetings = new();
 
     public MeetingHub(ILogger<MeetingHub> logger, AppDbContext dbContext)
     {
@@ -43,6 +50,41 @@ public class MeetingHub : Hub<IMeetingClient>
     {
         _logger.LogInformation("SignalR disconnected: {ConnectionId}. Error: {Error}",
             Context.ConnectionId, exception?.Message ?? "(none)");
+
+        // Remove connection from any meetings it was part of and notify groups
+        var connectionId = Context.ConnectionId;
+        var userName = Context.User?.Identity?.Name ?? "<anonymous>";
+
+        if (_connectionMeetings.TryRemove(connectionId, out var connMeetings))
+        {
+            foreach (var kv in connMeetings)
+            {
+                var meetingId = kv.Key;
+                if (_meetingParticipants.TryGetValue(meetingId, out var participants))
+                {
+                    participants.TryRemove(connectionId, out _);
+                    var count = participants.Count;
+
+                    try
+                    {
+                        var dto = new ParticipantLeftDto(meetingId, connectionId, userName, count);
+                        // notify admins and meeting group participants
+                        await Clients.Group(AdminsGroup).ParticipantLeft(dto);
+                        await Clients.Group(MeetingGroup(meetingId)).ParticipantLeft(dto);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error broadcasting ParticipantLeft for meeting {MeetingId} on disconnect", meetingId);
+                    }
+
+                    if (participants.IsEmpty)
+                    {
+                        _meetingParticipants.TryRemove(meetingId, out _);
+                    }
+                }
+            }
+        }
+
         await base.OnDisconnectedAsync(exception);
     }
 
@@ -56,6 +98,28 @@ public class MeetingHub : Hub<IMeetingClient>
             var isAdmin = Context.User?.IsInRole("Admin") == true;
             _logger.LogInformation("SignalR connection {ConnectionId} (User={User}) joined group {Group} (IsAdmin={IsAdmin})",
                 Context.ConnectionId, userName, MeetingGroup(meetingId), isAdmin);
+
+            // Track presence
+            var participants = _meetingParticipants.GetOrAdd(meetingId, _ => new ConcurrentDictionary<string, string?>());
+            participants[Context.ConnectionId] = userName;
+            var connMeetings = _connectionMeetings.GetOrAdd(Context.ConnectionId, _ => new ConcurrentDictionary<string, byte>());
+            connMeetings.TryAdd(meetingId, 0);
+
+            var count = participants.Count;
+
+            // Notify admins (and optionally meeting participants) that a participant joined
+            try
+            {
+                var dto = new ParticipantJoinedDto(meetingId, Context.ConnectionId, userName, count);
+                // notify admins
+                await Clients.Group(AdminsGroup).ParticipantJoined(dto);
+                // also notify meeting group participants (optional)
+                await Clients.Group(MeetingGroup(meetingId)).ParticipantJoined(dto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error broadcasting ParticipantJoined for meeting {MeetingId}", meetingId);
+            }
         }
         catch (Exception ex)
         {
@@ -73,6 +137,40 @@ public class MeetingHub : Hub<IMeetingClient>
             var isAdmin = Context.User?.IsInRole("Admin") == true;
             _logger.LogInformation("SignalR connection {ConnectionId} (User={User}) left group {Group} (IsAdmin={IsAdmin})",
                 Context.ConnectionId, userName, MeetingGroup(meetingId), isAdmin);
+
+            // Update presence tracking
+            int count = 0;
+            if (_meetingParticipants.TryGetValue(meetingId, out var participants))
+            {
+                participants.TryRemove(Context.ConnectionId, out _);
+                count = participants.Count;
+                if (participants.IsEmpty)
+                {
+                    _meetingParticipants.TryRemove(meetingId, out _);
+                }
+            }
+            if (_connectionMeetings.TryGetValue(Context.ConnectionId, out var connMeetings))
+            {
+                connMeetings.TryRemove(meetingId, out _);
+                if (connMeetings.IsEmpty)
+                {
+                    _connectionMeetings.TryRemove(Context.ConnectionId, out _);
+                }
+            }
+
+            // Notify admins (and optionally meeting participants) that a participant left
+            try
+            {
+                var dto = new ParticipantLeftDto(meetingId, Context.ConnectionId, userName, count);
+                // notify admins
+                await Clients.Group(AdminsGroup).ParticipantLeft(dto);
+                // also notify meeting group participants (optional)
+                await Clients.Group(MeetingGroup(meetingId)).ParticipantLeft(dto);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error broadcasting ParticipantLeft for meeting {MeetingId}", meetingId);
+            }
         }
         catch (Exception ex)
         {

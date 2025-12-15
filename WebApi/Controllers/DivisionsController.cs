@@ -5,6 +5,7 @@ using Application.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using WebApi.DTOs;
 
 using Application.Divisions.Queries.GetMeetings;
 using Application.Divisions.Commands.CreateMeeting;
@@ -13,7 +14,6 @@ namespace WebApi.Controllers;
 
 [ApiController]
 [Route("api/divisions")]
-[Authorize]
 public class DivisionsController : ControllerBase
 {
     private readonly IMediator _mediator;
@@ -25,6 +25,7 @@ public class DivisionsController : ControllerBase
 
     // GET: /api/divisions/{divisionId}/meetings
     [HttpGet("{divisionId:guid}/meetings")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> GetMeetings(Guid divisionId)
     {
         try
@@ -38,14 +39,9 @@ public class DivisionsController : ControllerBase
         }
     }
 
-    public record CreateMeetingRequest(
-        string Title,
-        DateTime StartsAtUtc,
-        [property: JsonConverter(typeof(JsonStringEnumConverter))] MeetingStatus Status
-    );
-
     // POST: /api/divisions/{divisionId}/meetings
     [HttpPost("{divisionId:guid}/meetings")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> CreateMeeting(Guid divisionId, [FromBody] CreateMeetingRequest req)
     {
         try
