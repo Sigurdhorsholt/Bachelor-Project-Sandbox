@@ -16,6 +16,8 @@ type Props = {
     setSelectedProposition?: React.Dispatch<React.SetStateAction<PropositionDto | null>>;
     openVotation?: any;
     attendance: { present: number; registered: number };
+    // number of connected participants (admin-only realtime snapshot)
+    participantsConnected?: number;
     handleFinalizeResults: () => void;
     // props for proposition controls
     showResults?: boolean;
@@ -28,7 +30,7 @@ type Props = {
     isClosingVote?: boolean;
 };
 
-export default function AdminLiveMonitorOverview({ meeting, selectedAgenda = null, selectedProposition = null, setSelectedProposition, openVotation, attendance, handleFinalizeResults, showResults = false, setShowResults, startVote, stopVotation, hasOpenVotation = false, handleStartReVote, isOpeningVote = false, isClosingVote = false }: Props){
+export default function AdminLiveMonitorOverview({ meeting, selectedAgenda = null, selectedProposition = null, setSelectedProposition, openVotation, attendance, handleFinalizeResults, showResults = false, setShowResults, startVote, stopVotation, hasOpenVotation = false, handleStartReVote, isOpeningVote = false, isClosingVote = false, participantsConnected = 0 }: Props){
     // selectedProposition comes from parent; keep a local alias for clarity
     const selectedProp = selectedProposition ?? null;
 
@@ -132,7 +134,6 @@ export default function AdminLiveMonitorOverview({ meeting, selectedAgenda = nul
                                  isClosingVote={isClosingVote}
                                  hasOpenVotation={hasOpenVotation}
                                  isSelectedPropositionOpen={isSelectedPropositionOpen}
-                                 voteResults={undefined}
                                  voteResults={voteResults}
                              />
                              
@@ -152,6 +153,7 @@ export default function AdminLiveMonitorOverview({ meeting, selectedAgenda = nul
                                 <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
                                     <Chip label={`Present: ${attendance.present}`} size="small" />
                                     <Chip label={`Registered: ${attendance.registered}`} size="small" />
+                                    <Chip label={`Connected: ${participantsConnected}`} size="small" color={participantsConnected > 0 ? 'primary' : 'default'} />
                                 </Box>
                             </Box>
 
