@@ -20,7 +20,6 @@ type Props = {
     isOpeningVote: boolean;
     isClosingVote: boolean;
     hasOpenVotation: boolean;
-    // whether the currently-selected proposition is the one that has an open votation
     isSelectedPropositionOpen?: boolean;
     voteResults?: VotationResultsDto;
 };
@@ -41,8 +40,6 @@ export function AdminLivePropositionControls({
                                              }: Props) {
     const hasSelection = !!(selectedAgenda && selectedProposition);
     const openDisabled = !hasSelection || hasOpenVotation || isOpeningVote || isClosingVote;
-
-    // Derived values (no local state) so they always reflect incoming props
     const closeDisabled = !hasSelection || !hasOpenVotation || !isSelectedPropositionOpen || isOpeningVote || isClosingVote;
     const voteHasResults = Boolean(voteResults && voteResults.open === false);
     const canReVote = Boolean(voteResults && voteResults.open === false);
@@ -111,5 +108,3 @@ export function AdminLivePropositionControls({
         </Box>
     );
 }
-
-export default AdminLivePropositionControls;

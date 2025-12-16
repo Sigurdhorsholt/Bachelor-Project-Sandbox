@@ -1,4 +1,4 @@
-import {useEffect, useState} from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import {
@@ -17,7 +17,7 @@ import type { RootState } from "../../Redux/store";
 
 export default function MeetingLogin() {
     const { id: meetingCode } = useParams<{ id: string }>();
-    const [accessCode, setAccessCode] = useState("TESTCODE");
+    const [accessCode, setAccessCode] = useState("");
     const [attendeeLogin, { isLoading, error }] = useAttendeeLoginMutation();
     const dispatch = useDispatch();
     const nav = useNavigate();
@@ -25,9 +25,9 @@ export default function MeetingLogin() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         if (!meetingCode || !accessCode.trim()) {
-            return
+            return;
         }
 
         try {
@@ -36,12 +36,14 @@ export default function MeetingLogin() {
                 accessCode: accessCode.trim(),
             }).unwrap();
 
-            dispatch(setAttendeeAuth({
-                accessToken: result.accessToken,
-                meetingId: result.meetingId,
-                ticketId: result.ticketId,
-                ticketCode: accessCode.trim(),
-            }));
+            dispatch(
+                setAttendeeAuth({
+                    accessToken: result.accessToken,
+                    meetingId: result.meetingId,
+                    ticketId: result.ticketId,
+                    ticketCode: accessCode.trim(),
+                })
+            );
         } catch (err) {
             console.error("Attendee login failed:", err);
         }
@@ -57,7 +59,7 @@ export default function MeetingLogin() {
     return (
         <div className="min-h-screen flex flex-col bg-gradient-to-b from-white to-slate-50">
             <Container maxWidth="sm" className="grow flex flex-col justify-center py-12">
-                <Paper elevation={2} className="p-6 sm:p-8 rounded-2xl">
+                <Paper elevation={3} className="p-6 sm:p-8 rounded-2xl">
                     <Box className="flex items-center gap-3 mb-6">
                         <MeetingRoomIcon className="!text-4xl text-blue-600" />
                         <div>
@@ -71,8 +73,9 @@ export default function MeetingLogin() {
                     </Box>
 
                     {error && (
-                        <Alert severity="error" className="mb-4">
-                            {(error as any)?.data?.error || "Ugyldig adgangskode eller møde ikke fundet"}
+                        <Alert severity="error" className="mb-4 rounded-lg">
+                            {(error as any)?.data?.error ||
+                                "Ugyldig adgangskode eller møde ikke fundet"}
                         </Alert>
                     )}
 
@@ -94,14 +97,18 @@ export default function MeetingLogin() {
                             size="large"
                             fullWidth
                             disabled={isLoading || !accessCode.trim()}
-                            className="!rounded-xl"
+                            className="!rounded-xl !font-bold"
                         >
                             {isLoading ? "Logger ind..." : "Få adgang til mødet"}
                         </Button>
                     </form>
 
-                    <Typography variant="caption" className="block mt-4 text-center !text-slate-500">
-                        Du skulle have modtaget din adgangskode via e-mail eller fra mødeadministratoren.
+                    <Typography
+                        variant="caption"
+                        className="block mt-4 text-center !text-slate-500"
+                    >
+                        Du skulle have modtaget din adgangskode via e-mail eller fra
+                        mødeadministratoren.
                     </Typography>
                 </Paper>
             </Container>

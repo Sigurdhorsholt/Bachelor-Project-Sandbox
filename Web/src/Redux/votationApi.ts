@@ -110,7 +110,30 @@ export const votationApi = api.injectEndpoints({
             providesTags: (result, _err, votationId) => [{ type: "Votations" as const, id: votationId }],
         }),
 
+        // POST /api/votation/{votationId}/manual-ballots
+        addManualBallots: b.mutation<
+            { totalBallotsAdded: number; votationId: string; recordedAtUtc: string; countsByOption: Record<string, number> },
+            { votationId: string; counts: Record<string, number>; notes?: string }
+        >({
+            query: ({ votationId, counts, notes }) => ({
+                url: `/votation/${votationId}/manual-ballots`,
+                method: "POST",
+                body: { counts, notes },
+            }),
+            invalidatesTags: (_result, _err, { votationId }) => [
+                { type: "Votations" as const, id: votationId }
+            ],
+        }),
+
     }),
 });
 
-export const { useStartVoteAndCreateVotationMutation, useStopVotationMutation, useGetVotationQuery, useGetOpenVotationsByMeetingIdQuery, useGetVotationResultsQuery, useStartReVoteMutation } = votationApi;
+export const { 
+    useStartVoteAndCreateVotationMutation, 
+    useStopVotationMutation, 
+    useGetVotationQuery, 
+    useGetOpenVotationsByMeetingIdQuery, 
+    useGetVotationResultsQuery, 
+    useStartReVoteMutation,
+    useAddManualBallotsMutation
+} = votationApi;
