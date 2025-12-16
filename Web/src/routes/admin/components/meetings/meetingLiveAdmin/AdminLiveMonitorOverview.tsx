@@ -6,6 +6,7 @@ import FileDownloadRoundedIcon from '@mui/icons-material/FileDownloadRounded';
 
 import { useGetVotationResultsQuery, useGetOpenVotationsByMeetingIdQuery } from "../../../../../Redux/votationApi.ts";
 import { useGetMeetingQuery, useGetAgendaWithPropositionsQuery } from "../../../../../Redux/meetingsApi.ts";
+import ManualBallots from "./ManualBallots.tsx";
 import type { VoteOptionDto } from "../../../../../domain/voteOptions.ts";
 import type { VotationResultsDto } from "../../../../../Redux/votationApi.ts";
 
@@ -56,8 +57,17 @@ export default function AdminLiveMonitorOverview({
     }
 
     return (
-        <Box sx={{ height: '100%' }}>
-            <Card elevation={1} className="rounded-2xl" sx={{ height: '100%', display: 'grid', gridTemplateColumns: { xs: '1fr', md: '3fr 1fr' } }}>
+        <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* Manual Ballots Section */}
+            <ManualBallots
+                proposition={selectedProposition || null}
+                votationId={latestVotationId || null}
+                disabled={!openVotation || !voteResults?.open}
+                onApply={() => console.log("Manual ballots applied")}
+            />
+
+            {/* Existing Monitor Card */}
+            <Card elevation={1} className="rounded-2xl" sx={{ flex: 1, display: 'grid', gridTemplateColumns: { xs: '1fr', md: '3fr 1fr' } }}>
                 {/* LEFT: Live monitor */}
                 <Box>
                     <CardHeader

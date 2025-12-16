@@ -207,4 +207,52 @@ public class VotationController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Add manual ballots for paper votes cast physically during a meeting
+    /// </summary>
+    [HttpPost("{votationId:guid}/manual-ballots")]
+    public async Task<IActionResult> AddManualBallots(Guid votationId, [FromBody] ManualBallotRequest request)
+    {
+        try
+        {
+            if (request?.Counts == null || !request.Counts.Any())
+            {
+                return BadRequest("At least one vote option with a count is required.");
+            }
+
+            var result = await _votingService.AddManualBallotsAsync(votationId, request.Counts, request.Notes);
+
+            // Broadcast vote cast event to trigger real-time updates
+            var votation = await _votingService.GetVotationAsync(votationId);
+            if (votation != null)
+            {
+                await _broadcast.VoteCast(
+                    votation.MeetingId.ToString(),
+                    votation.PropositionId.ToString(),
+                    votationId.ToString());
+            }
+
+            return Ok(new
+            {
+                result.TotalBallotsAdded,
+                result.VotationId,
+                result.RecordedAtUtc,
+                result.CountsByOption
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, "An error occurred while adding manual ballots.");
+        }
+    }
+}
+
+public class ManualBallotRequest
+{
+    public Dictionary<Guid, int> Counts { get; set; } = new();
+    public string? Notes { get; set; }
 }

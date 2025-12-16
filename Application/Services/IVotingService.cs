@@ -59,6 +59,11 @@ public interface IVotingService
     /// Start a re-vote for a proposition (closes existing votations and marks them as overwritten)
     /// </summary>
     Task<RevoteResult> StartRevoteAsync(Guid propositionId);
+    
+    /// <summary>
+    /// Add manual ballots for paper votes cast physically during a meeting
+    /// </summary>
+    Task<ManualBallotResult> AddManualBallotsAsync(Guid votationId, Dictionary<Guid, int> optionCounts, string? notes);
 }
 
 public class CastVoteResult
@@ -145,4 +150,12 @@ public class RevoteResult
     public Guid? PropositionId { get; set; }
     public DateTime? EndedAtUtc { get; set; }
     public int ClosedVotationsCount { get; set; }
+}
+
+public class ManualBallotResult
+{
+    public int TotalBallotsAdded { get; set; }
+    public Guid VotationId { get; set; }
+    public DateTime RecordedAtUtc { get; set; }
+    public Dictionary<Guid, int> CountsByOption { get; set; } = new();
 }

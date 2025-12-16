@@ -219,6 +219,67 @@ public class VotingService : IVotingService
         return BuildRevoteResult(latest, propositionId, closedCount);
     }
 
+    public async Task<ManualBallotResult> AddManualBallotsAsync(Guid votationId, Dictionary<Guid, int> optionCounts, string? notes)
+    {
+        await using var tx = await _db.Database.BeginTransactionAsync();
+
+        try
+        {
+            // Validate votation exists and is open
+            var votation = await ValidateVotationForManualBallotsAsync(votationId);
+
+            // Validate all vote options belong to this votation's proposition
+            await ValidateVoteOptionsForVotationAsync(votation.PropositionId, optionCounts.Keys.ToList());
+
+            // Validate all counts are positive
+            ValidateOptionCounts(optionCounts);
+
+            var recordedAtUtc = DateTime.UtcNow;
+            var totalAdded = 0;
+            var countsByOption = new Dictionary<Guid, int>();
+
+            // Create ballots for each option and count
+            foreach (var (optionId, count) in optionCounts)
+            {
+                if (count <= 0) continue;
+
+                for (int i = 0; i < count; i++)
+                {
+                    await CreateManualBallotAsync(votation.Id, optionId, recordedAtUtc);
+                    totalAdded++;
+                }
+
+                countsByOption[optionId] = count;
+            }
+
+            // Create audit event for manual ballot addition
+            if (totalAdded > 0)
+            {
+                await CreateManualBallotAuditEventAsync(votation, countsByOption, totalAdded, notes, recordedAtUtc);
+            }
+
+            await tx.CommitAsync();
+
+            _logger.LogInformation(
+                "[ManualBallotsAdded] VotationId={VotationId} TotalAdded={Count} Notes={Notes}",
+                votationId, totalAdded, notes ?? "None");
+
+            return new ManualBallotResult
+            {
+                TotalBallotsAdded = totalAdded,
+                VotationId = votationId,
+                RecordedAtUtc = recordedAtUtc,
+                CountsByOption = countsByOption
+            };
+        }
+        catch (Exception ex)
+        {
+            await tx.RollbackAsync();
+            _logger.LogError(ex, "Error adding manual ballots for votation {VotationId}", votationId);
+            throw;
+        }
+    }
+
     #endregion
 
     #region Helper Methods - Admission Ticket Resolution
@@ -404,6 +465,128 @@ public class VotingService : IVotingService
         _logger.LogInformation(
             "[VotationOverwrite] MeetingId={MeetingId} PropositionId={PropositionId} ClosedVotations={Count}",
             meetingId, propositionId, existingVotations.Count);
+    }
+
+    private async Task<Votation> ValidateVotationForManualBallotsAsync(Guid votationId)
+    {
+        var votation = await _db.Votations
+            .Include(v => v.Proposition)
+            .FirstOrDefaultAsync(v => v.Id == votationId);
+
+        if (votation == null)
+        {
+            throw new InvalidOperationException("Votation not found.");
+        }
+
+        if (!votation.Open)
+        {
+            throw new InvalidOperationException("Cannot add manual ballots to a closed votation.");
+        }
+
+        return votation;
+    }
+
+    private async Task ValidateVoteOptionsForVotationAsync(Guid propositionId, List<Guid> optionIds)
+    {
+        var validOptions = await _db.VoteOptions
+            .Where(vo => vo.PropositionId == propositionId)
+            .Select(vo => vo.Id)
+            .ToListAsync();
+
+        var invalidOptions = optionIds.Where(id => !validOptions.Contains(id)).ToList();
+
+        if (invalidOptions.Any())
+        {
+            throw new InvalidOperationException(
+                $"The following vote option IDs do not belong to this proposition: {string.Join(", ", invalidOptions)}");
+        }
+    }
+
+    private void ValidateOptionCounts(Dictionary<Guid, int> optionCounts)
+    {
+        var invalidCounts = optionCounts.Where(kvp => kvp.Value < 0).ToList();
+
+        if (invalidCounts.Any())
+        {
+            throw new InvalidOperationException(
+                $"Vote counts must be non-negative. Invalid counts for options: {string.Join(", ", invalidCounts.Select(kvp => kvp.Key))}");
+        }
+    }
+
+    private async Task CreateManualBallotAsync(Guid votationId, Guid voteOptionId, DateTime recordedAtUtc)
+    {
+        // Get the votation to access the meeting ID
+        var votation = await _db.Votations.FindAsync(votationId);
+        if (votation == null)
+        {
+            throw new InvalidOperationException("Votation not found.");
+        }
+
+        // Create a placeholder admission ticket for the manual ballot
+        var placeholderTicket = new AdmissionTicket
+        {
+            Id = Guid.NewGuid(),
+            MeetingId = votation.MeetingId,
+            Code = $"MANUAL-{Guid.NewGuid():N}",
+            Used = true
+        };
+
+        _db.AdmissionTickets.Add(placeholderTicket);
+
+        var ballot = new Ballot
+        {
+            Id = Guid.NewGuid(),
+            AdmissionTicketId = placeholderTicket.Id,
+            VotationId = votationId,
+            VoteOptionId = voteOptionId,
+            CastAtUtc = recordedAtUtc
+        };
+
+        _db.Ballots.Add(ballot);
+
+        var vote = new Vote
+        {
+            Id = Guid.NewGuid(),
+            BallotId = ballot.Id,
+            CreatedAtUtc = recordedAtUtc
+        };
+
+        _db.Votes.Add(vote);
+
+        var auditEvent = new AuditableEvent
+        {
+            Id = Guid.NewGuid(),
+            VoteId = vote.Id,
+            EventType = "ManualBallotAdded",
+            Metadata = $"Manual ballot added for votation {votationId}",
+            TimestampUtc = recordedAtUtc
+        };
+
+        _db.AuditableEvents.Add(auditEvent);
+
+        await _db.SaveChangesAsync();
+    }
+
+    private async Task CreateManualBallotAuditEventAsync(
+        Votation votation,
+        Dictionary<Guid, int> countsByOption,
+        int totalAdded,
+        string? notes,
+        DateTime recordedAtUtc)
+    {
+        var metadata = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            TotalAdded = totalAdded,
+            CountsByOption = countsByOption,
+            Notes = notes,
+            MeetingId = votation.MeetingId,
+            PropositionId = votation.PropositionId,
+            RecordedBy = "Admin"
+        });
+
+        _logger.LogInformation(
+            "[ManualBallotAudit] VotationId={VotationId} Metadata={Metadata}",
+            votation.Id, metadata);
     }
 
     #endregion
