@@ -1,12 +1,11 @@
-﻿// ...existing code...
+﻿using Application.Services;
 using System;
 
 namespace WebApi.DTOs
 {
     public record LoginRequest(string Email, string Password);
-    public record LoginResponse(string AccessToken, DateTime ExpiresAt, string Email, string[] Roles);
-
+    // LoginResponse is now in Application.Services
+    
     public record AttendeeLoginRequest(string MeetingCode, string AccessCode);
-    public record AttendeeLoginResponse(string AccessToken, DateTime ExpiresAt, Guid MeetingId, Guid TicketId);
+    // AttendeeLoginResponse is now in Application.Services
 }
-
