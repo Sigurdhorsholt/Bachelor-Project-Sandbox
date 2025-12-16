@@ -1,255 +1,210 @@
-﻿using Application.Domain.Entities;
-using Application.Persistence;
+﻿using Application.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using WebApi.Realtime;
 using Microsoft.AspNetCore.Authorization;
 
 namespace WebApi.Controllers;
-
 
 [ApiController]
 [Route("api/votation/")]
 [Authorize]
 public class VotationController : ControllerBase
 {
-    private AppDbContext _db;
     private readonly IMeetingBroadcaster _broadcast;
+    private readonly IVotingService _votingService;
 
     public VotationController(
-        AppDbContext db,
-        IMeetingBroadcaster broadcaster
-        )
+        IMeetingBroadcaster broadcaster,
+        IVotingService votingService)
     {
-        _db = db;
         _broadcast = broadcaster;
-    } 
-    
-    
-    
+        _votingService = votingService;
+    }
+
+    /// <summary>
+    /// Start a votation for a proposition in a meeting
+    /// </summary>
     [HttpPost("start/{meetingId:guid}/{propositionId:guid}")]
     public async Task<IActionResult> StartVoteAndCreateVotation(Guid meetingId, Guid propositionId)
     {
-  
-        var meeting = await _db.Meetings.FindAsync(meetingId);
-        if (meeting == null) return NotFound("Meeting not found.");
-        
-        var proposition = await _db.Propositions.FindAsync(propositionId);
-        if (proposition == null) return NotFound("Proposition not found.");
-
-        await using var tx = await _db.Database.BeginTransactionAsync();
-
-        
-        var openVotationExists = await _db.Votations
-            .AnyAsync(v => v.MeetingId == meetingId && v.PropositionId == propositionId && v.Open);
-        
-        var anyVotationExists = await _db.Votations
-            .AnyAsync(v => v.MeetingId == meetingId && v.PropositionId == propositionId);
-
-        if (openVotationExists)
+        try
         {
-            return BadRequest("An open votation for this proposition already exists in the meeting.");
-        }
-
-        if (anyVotationExists)
-        {
-            var votations = await _db.Votations
-                .Where(v => v.MeetingId == meetingId && v.PropositionId == propositionId)
-                .ToListAsync();
-
-            votations.ForEach(v => v.Overwritten = true);
+            var result = await _votingService.StartVotationAsync(meetingId, propositionId);
             
-            await _db.SaveChangesAsync();
+            // Broadcast the votation opened event
+            await _broadcast.MeetingPropositionOpened(
+                meetingId.ToString(),
+                propositionId.ToString(),
+                result.VotationId.ToString());
+
+            return Ok(new
+            {
+                result.VotationId,
+                result.MeetingId,
+                result.PropositionId,
+                result.StartedAtUtc,
+                result.Open
+            });
         }
-        
-        
-        var votation = new Votation
+        catch (InvalidOperationException ex)
         {
-            Id = Guid.NewGuid(),
-            MeetingId = meetingId,
-            PropositionId = propositionId,
-            StartedAtUtc = DateTime.UtcNow,
-            Open = true,
-            Overwritten = false
-        };
-        
-        _db.Votations.Add(votation);
-        await _db.SaveChangesAsync();
-        
-        await tx.CommitAsync();
-        
-        await _broadcast.MeetingPropositionOpened(
-            meetingId.ToString(),
-            propositionId.ToString(),
-            votation.Id.ToString()
-        );
-        
-        return Ok(votation);
+            return BadRequest(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, "An error occurred while starting the votation.");
+        }
     }
 
+    /// <summary>
+    /// Stop an open votation for a proposition
+    /// </summary>
     [HttpPost("stop/{propositionId:guid}")]
     public async Task<IActionResult> StopVotation(Guid propositionId)
     {
-        var votation = await _db.Votations
-            .AsTracking()  // ← This is critical for EF Core to track changes!
-            .Where(v => v.PropositionId == propositionId && v.Open)
-            .OrderByDescending(v => v.StartedAtUtc)
-            .FirstOrDefaultAsync();
-        
-        if (votation == null)
+        try
         {
-            return NotFound("No open votation found for this proposition.");
+            var result = await _votingService.StopVotationAsync(propositionId);
+
+            // Broadcast the votation stopped event
+            await _broadcast.MeetingVotationStopped(
+                result.MeetingId.ToString(),
+                result.PropositionId.ToString(),
+                result.VotationId.ToString(),
+                result.EndedAtUtc);
+
+            return Ok(new
+            {
+                result.VotationId,
+                result.MeetingId,
+                result.PropositionId,
+                result.EndedAtUtc,
+                Open = false
+            });
         }
-
-        votation.Open = false;
-        votation.EndedAtUtc = DateTime.UtcNow;
-
-        await _db.SaveChangesAsync();
-
-        await _broadcast.MeetingVotationStopped(
-            votation.MeetingId.ToString(),
-            votation.PropositionId.ToString(),
-            votation.Id.ToString(),
-            votation.EndedAtUtc ?? DateTime.UtcNow
-        );
-
-        return Ok(votation);
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, "An error occurred while stopping the votation.");
+        }
     }
-    
-    
+
+    /// <summary>
+    /// Get a votation by ID
+    /// </summary>
     [HttpGet("{votationId:guid}")]
     public async Task<IActionResult> GetVotation(Guid votationId)
     {
-        var votation = await _db.Votations.FindAsync(votationId);
-        if (votation == null) return NotFound();
+        var votation = await _votingService.GetVotationAsync(votationId);
+        
+        if (votation == null)
+        {
+            return NotFound();
+        }
+
         return Ok(votation);
     }
 
+    /// <summary>
+    /// Get all open votations for a meeting
+    /// </summary>
     [HttpGet("open-votes/{meetingId:guid}")]
     public async Task<IActionResult> GetOpenVotationsForMeeting(Guid meetingId)
     {
-        var meeting = await _db.Meetings.FindAsync(meetingId);
-        if (meeting == null) return NotFound("Meeting not found.");
-        
-        
-        var openVotations = await _db.Votations
-            .Where(v => v.MeetingId == meetingId && v.Open)
-            .ToListAsync();
-
-        return Ok(openVotations);
+        try
+        {
+            var openVotations = await _votingService.GetOpenVotationsForMeetingAsync(meetingId);
+            return Ok(openVotations);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, "An error occurred while retrieving open votations.");
+        }
     }
 
-    // GET: /api/votation/by-proposition/{meetingId}/{propositionId}
+    /// <summary>
+    /// Get all votations for a specific proposition in a meeting
+    /// </summary>
     [HttpGet("by-proposition/{meetingId:guid}/{propositionId:guid}")]
     public async Task<IActionResult> GetVotationsByProposition(Guid meetingId, Guid propositionId)
     {
-        var meeting = await _db.Meetings.FindAsync(meetingId);
-        if (meeting == null) return NotFound("Meeting not found.");
-
-        var proposition = await _db.Propositions.FindAsync(propositionId);
-        if (proposition == null) return NotFound("Proposition not found.");
-
-        var votations = await _db.Votations
-            .Where(v => v.MeetingId == meetingId && v.PropositionId == propositionId)
-            .OrderByDescending(v => v.StartedAtUtc)
-            .Select(v => new
-            {
-                v.Id,
-                v.MeetingId,
-                v.PropositionId,
-                v.StartedAtUtc,
-                v.EndedAtUtc,
-                v.Open,
-                v.Overwritten
-            })
-            .ToListAsync();
-
-        return Ok(votations);
+        try
+        {
+            var votations = await _votingService.GetVotationsByPropositionAsync(meetingId, propositionId);
+            return Ok(votations);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, "An error occurred while retrieving votations.");
+        }
     }
-    
-    // GET: /api/votation/results/{votationId}
+
+    /// <summary>
+    /// Get vote results for a votation
+    /// </summary>
     [HttpGet("results/{votationId:guid}")]
-    [AllowAnonymous] // TEMP: allow anonymous for debugging; remove/restore AdminOnly policy after testing
+    [AllowAnonymous]
     public async Task<IActionResult> GetVotationResults(Guid votationId)
     {
-        var votation = await _db.Votations
-            .Include(v => v.Proposition!)
-                .ThenInclude(p => p.Options!)
-            .FirstOrDefaultAsync(v => v.Id == votationId);
-
-        if (votation == null)
+        try
         {
-            return NotFound("Votation not found.");
+            var results = await _votingService.GetVotationResultsAsync(votationId);
+            return Ok(results);
         }
-
-        var proposition = votation.Proposition;
-        if (proposition == null)
+        catch (InvalidOperationException ex)
         {
-            return NotFound("Proposition not found for this votation.");
+            return NotFound(ex.Message);
         }
-
-        // Get all ballots for this votation with vote options
-        var ballots = await _db.Ballots
-            .Include(b => b.VoteOption)
-            .Where(b => b.VotationId == votationId)
-            .ToListAsync();
-
-        var results = proposition.Options.Select(opt => new
+        catch (Exception ex)
         {
-            VoteOptionId = opt.Id,
-            opt.Label,
-            Count = ballots.Count(b => b.VoteOptionId == opt.Id)
-        }).ToList();
-
-        return Ok(new
-        {
-            VotationId = votation.Id,
-            PropositionId = votation.PropositionId,
-            Question = proposition.Question,
-            TotalVotes = ballots.Count,
-            Results = results,
-            Open = votation.Open,
-            StartedAt = votation.StartedAtUtc,
-            EndedAt = votation.EndedAtUtc
-        });
+            return StatusCode(500, "An error occurred while retrieving votation results.");
+        }
     }
 
-    // POST: /api/votation/revote/{propositionId}
+    /// <summary>
+    /// Start a re-vote for a proposition (closes existing votations and marks them as overwritten)
+    /// </summary>
     [HttpPost("revote/{propositionId:guid}")]
     public async Task<IActionResult> StartReVote(Guid propositionId)
     {
-        // Find the latest votation for the given proposition (by StartedAtUtc descending)
-        var latest = await _db.Votations
-            .AsTracking() // ensure EF Core will track and persist our change
-            .Where(v => v.PropositionId == propositionId)
-            .OrderByDescending(v => v.StartedAtUtc)
-            .FirstOrDefaultAsync();
-        
-        var existingVotations = await _db.Votations
-            .Where(v => v.PropositionId == propositionId && v.Open && !v.Overwritten)
-            .ToListAsync();
-        
-        foreach (var v in existingVotations)
+        try
         {
-            v.Overwritten = true;
-            v.Open = false;
-            v.EndedAtUtc = DateTime.UtcNow;
+            var result = await _votingService.StartRevoteAsync(propositionId);
+
+            // If we closed an open votation, broadcast that it stopped
+            if (result.LatestVotationId.HasValue && result.MeetingId.HasValue && result.EndedAtUtc.HasValue)
+            {
+                await _broadcast.MeetingVotationStopped(
+                    result.MeetingId.Value.ToString(),
+                    propositionId.ToString(),
+                    result.LatestVotationId.Value.ToString(),
+                    result.EndedAtUtc.Value);
+            }
+
+            return Ok(new
+            {
+                Message = $"Closed {result.ClosedVotationsCount} votation(s)",
+                result.ClosedVotationsCount,
+                result.LatestVotationId,
+                result.MeetingId,
+                result.PropositionId
+            });
         }
-
-        await _db.SaveChangesAsync();
-
-        // If we closed an open votation, broadcast that it stopped so realtime clients update
-        if (latest != null && !latest.Open)
+        catch (Exception ex)
         {
-            await _broadcast.MeetingVotationStopped(
-                latest.MeetingId.ToString(),
-                latest.PropositionId.ToString(),
-                latest.Id.ToString(),
-                latest.EndedAtUtc ?? DateTime.UtcNow
-            );
+            return StatusCode(500, "An error occurred while starting the revote.");
         }
-
-        return Ok();
     }
 
 }

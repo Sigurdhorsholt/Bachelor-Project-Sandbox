@@ -28,6 +28,7 @@ builder.Services.AddScoped<IMeetingBroadcaster, MeetingBroadcaster>();
 builder.Services.AddScoped<IAdmissionTicketService, AdmissionTicketService>();
 builder.Services.AddScoped<IMeetingCodeService, MeetingCodeService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IVotingService, VotingService>();
 builder.Services.AddMediatR(typeof(GetAgendaQueryHandler).Assembly);
 // Controllers are authorized per-action
 builder.Services.AddControllers();
