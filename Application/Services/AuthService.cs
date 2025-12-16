@@ -52,7 +52,9 @@ public class AuthService : IAuthService
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.Email == email, ct);
 
+        //empty for now. Organisations comes later
         var organisations = new List<object>();
+        
         if (user?.Organisation != null)
         {
             organisations.Add(new { user.Organisation.Id, user.Organisation.Name });
@@ -96,9 +98,6 @@ public class AuthService : IAuthService
         {
             return null;
         }
-
-        //ticket.Used = true;
-        //await _db.SaveChangesAsync(ct);
 
         var token = IssueAttendeeJwt(meeting.Id, ticket!.Id, ticket.Code, TimeSpan.FromHours(4));
         var expires = DateTime.UtcNow.AddHours(4);
