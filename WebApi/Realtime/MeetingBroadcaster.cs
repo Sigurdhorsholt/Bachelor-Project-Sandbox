@@ -1,4 +1,5 @@
 // WebApi/Realtime/MeetingBroadcaster.cs
+using Application.Services;
 using Microsoft.AspNetCore.SignalR;
 
 namespace WebApi.Realtime;

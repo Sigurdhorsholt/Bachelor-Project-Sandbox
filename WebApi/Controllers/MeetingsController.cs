@@ -1,17 +1,15 @@
 // WebApi/Controllers/MeetingsController.cs
 
-using Application.Domain.Entities;
-using Application.Persistence;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using System.Text.Json.Serialization;
-using System.Linq;
-using Application.Services;
-using Microsoft.Extensions.Logging;
-using WebApi.Realtime;
-using WebApi.DTOs;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using MediatR;
+using Application.Meetings.Queries;
+using Application.Meetings.Commands;
+using Application.Services;
+using WebApi.DTOs;
+using Application.Domain.Entities;
+using WebApi.Realtime;
 
 namespace WebApi.Controllers;
 
@@ -19,21 +17,12 @@ namespace WebApi.Controllers;
 [Route("api/meetings")]
 public class MeetingsController : ControllerBase
 {
-    private AppDbContext _db;
-    private readonly ILogger<MeetingsController> _logger;
-    private readonly IMeetingCodeService _codeService;
+    private readonly IMediator _mediator;
     private readonly IMeetingBroadcaster _broadcast;
 
-
-    public MeetingsController(
-        AppDbContext db,
-        ILogger<MeetingsController> logger,
-        IMeetingCodeService codeService,
-        IMeetingBroadcaster broadcast)
+    public MeetingsController(IMediator mediator, IMeetingBroadcaster broadcast)
     {
-        _db = db;
-        _logger = logger;
-        _codeService = codeService;
+        _mediator = mediator;
         _broadcast = broadcast;
     }
 
@@ -41,168 +30,85 @@ public class MeetingsController : ControllerBase
     // Returns only meeting metadata (no nested agenda/propositions)
     [HttpGet("{id:guid}")]
     [Authorize(Policy = "AdminOrAttendee")]
-    public async Task<IActionResult> GetMeetingById(Guid id)
+    public async Task<IActionResult> GetMeetingById(Guid id, CancellationToken ct)
     {
-        var m = await _db.Meetings
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == id);
-        if (m is null)
+        var result = await _mediator.Send(new GetMeetingByIdQuery(id), ct);
+        
+        if (result is null)
         {
             return NotFound();
         }
 
-        return Ok(new
-        {
-            m.Id,
-            m.DivisionId,
-            m.Title,
-            StartsAtUtc = m.StartsAtUtc,
-            Status = m.Status.ToString(),
-            MeetingCode = m.MeetingCode,
-            Started = m.Started
-        });
+        return Ok(result);
     }
 
     // PATCH: /api/meetings/{id}
     [HttpPatch("{id:guid}")]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<IActionResult> Patch(Guid id, [FromBody] UpdateMeetingRequest req)
+    public async Task<IActionResult> Patch(Guid id, [FromBody] UpdateMeetingRequest req, CancellationToken ct)
     {
-        var meeting = await _db.Meetings
-            .Include(x => x.AgendaItems).ThenInclude(a => a.Propositions)
-            .AsTracking()
-            .FirstOrDefaultAsync(x => x.Id == id);
-        if (meeting == null)
+        var command = new UpdateMeetingCommand(
+            id,
+            req.Title,
+            req.StartsAtUtc,
+            req.Status,
+            req.RegenerateMeetingCode ?? false
+        );
+
+        var result = await _mediator.Send(command, ct);
+
+        if (!result.Success)
         {
-            return NotFound();
+            if (result.ErrorMessage == "Meeting not found")
+                return NotFound();
+            if (result.ErrorMessage == "Finished meetings cannot be edited.")
+                return Conflict(result.ErrorMessage);
+            if (result.ErrorMessage == "Title cannot be empty.")
+                return BadRequest(result.ErrorMessage);
+            return StatusCode(500, result.ErrorMessage);
         }
 
-        if (meeting.Status == MeetingStatus.Finished)
-        {
-            return Conflict("Finished meetings cannot be edited.");
-        }
-
-        if (req.Title is not null)
-        {
-            var t = req.Title.Trim();
-            if (t.Length == 0)
-            {
-                return BadRequest("Title cannot be empty.");
-            }
-
-            meeting.Title = t;
-        }
-
-        if (req.StartsAtUtc is not null)
-        {
-            var dt = DateTime.SpecifyKind(req.StartsAtUtc.Value, DateTimeKind.Utc);
-            meeting.StartsAtUtc = dt;
-        }
-
-        if (req.Status is not null)
-        {
-            meeting.Status = req.Status.Value;
-        }
-
-        if (req.RegenerateMeetingCode == true)
-        {
-            try
-            {
-                var code = await _codeService.GenerateUniqueCodeAsync();
-                meeting.MeetingCode = code;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to regenerate meeting code for {MeetingId}", id);
-                return StatusCode(500, "Failed to generate meeting code");
-            }
-        }
-
-        await _db.SaveChangesAsync();
-        // reload no tracking for clean output
-        var updated = await _db.Meetings
-            .Include(x => x.AgendaItems).ThenInclude(a => a.Propositions)
-            .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == id);
-
-        return Ok(new
-        {
-            updated!.Id,
-            updated.DivisionId,
-            updated.Title,
-            StartsAtUtc = updated.StartsAtUtc,
-            Status = updated.Status.ToString(),
-            MeetingCode = updated.MeetingCode,
-            Started = updated.Started,
-            Agenda = updated.AgendaItems.Select(a => new
-            {
-                a.Id,
-                a.Title,
-                a.Description,
-                Propositions = a.Propositions.Select(p => new { p.Id, Question = p.Question, VoteType = p.VoteType })
-                    .ToList()
-            }).ToList()
-        });
+        return Ok(result.Data);
     }
-
 
     [HttpPost("{id}/start")]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<IActionResult> StartMeeting(string id, CancellationToken cancellationToken)
+    public async Task<IActionResult> StartMeeting(string id, CancellationToken ct)
     {
-        var meeting = await _db.Meetings
-            .AsTracking()
-            .FirstOrDefaultAsync(x => x.Id == Guid.Parse(id), cancellationToken);
+        var result = await _mediator.Send(new StartMeetingCommand(Guid.Parse(id)), ct);
 
-        if (meeting is null)
+        if (!result.Success)
         {
             return NotFound();
         }
 
-        // If it is already started, be idempotent
-        var startedValue = (int)MeetingStarted.Started;
-        if (meeting.Started == startedValue)
+        // Only broadcast if the meeting was actually started (not already started)
+        if (!result.AlreadyStarted)
         {
-            return NoContent();
+            await _broadcast.MeetingStarted(result.MeetingId.ToString());
+            await _broadcast.MeetingStateChanged(result.MeetingId.ToString(), result.NewState);
         }
-
-        meeting.Started = startedValue;
-        //TODO: Add meeting started At time
-        await _db.SaveChangesAsync(cancellationToken);
-
-        await _broadcast.MeetingStarted(meeting.Id.ToString());
-        await _broadcast.MeetingStateChanged(meeting.Id.ToString(), meeting.Started);
 
         return NoContent();
     }
 
-
     [HttpPost("{id}/stop")]
     [Authorize(Policy = "AdminOnly")]
-    public async Task<IActionResult> StopMeeting(string id, CancellationToken cancellationToken)
+    public async Task<IActionResult> StopMeeting(string id, CancellationToken ct)
     {
-        var meeting = await _db.Meetings
-            .AsTracking()
-            .FirstOrDefaultAsync(x => x.Id == Guid.Parse(id), cancellationToken);
+        var result = await _mediator.Send(new StopMeetingCommand(Guid.Parse(id)), ct);
 
-        if (meeting is null)
+        if (!result.Success)
         {
             return NotFound();
         }
 
-        // If it is already started, be idempotent
-        var stoppedValue = (int)MeetingStarted.NotStarted;
-        if (meeting.Started == stoppedValue)
+        // Only broadcast if the meeting was actually stopped (not already stopped)
+        if (!result.AlreadyStopped)
         {
-            return NoContent();
+            await _broadcast.MeetingStopped(result.MeetingId.ToString());
+            await _broadcast.MeetingStateChanged(result.MeetingId.ToString(), result.NewState);
         }
-
-        meeting.Started = stoppedValue;
-        //TODO: Add meeting started At time
-        await _db.SaveChangesAsync(cancellationToken);
-
-        await _broadcast.MeetingStopped(meeting.Id.ToString());
-        await _broadcast.MeetingStateChanged(meeting.Id.ToString(), meeting.Started);
 
         return NoContent();
     }
@@ -210,33 +116,21 @@ public class MeetingsController : ControllerBase
     // GET: /api/meetings/meta?id={meetingCode}
     [HttpGet("meta")]
     [Authorize(Policy = "AttendeeOnly")]
-    public async Task<IActionResult> GetMeetingMeta([FromQuery] string meetingId, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetMeetingMeta([FromQuery] string meetingId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(meetingId))
         {
             return BadRequest("Meeting code is required.");
         }
 
-        var meeting = await _db.Meetings
-            .AsNoTracking()
-            .FirstOrDefaultAsync(m => m.Id.ToString() == meetingId, cancellationToken);
+        var result = await _mediator.Send(new GetMeetingMetaQuery(meetingId), ct);
 
-        if (meeting == null)
+        if (result == null)
         {
             return NotFound();
         }
 
-        var meetingMetaDto = new MeetingMetaDto
-        {
-            Id = meeting.Id,
-            Title = meeting.Title,
-            StartsAtUtc = meeting.StartsAtUtc,
-            Status = meeting.Status.ToString(),
-            MeetingCode = meeting.MeetingCode,
-            Started = meeting.Started
-        };
-
-        return Ok(meetingMetaDto);
+        return Ok(result);
     }
 
     // Debug endpoint to inspect current user's claims/roles
