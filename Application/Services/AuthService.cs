@@ -76,12 +76,12 @@ public class AuthService : IAuthService
 
         var isTestMode = false;
 
-        if (accessCode.Equals("TESTCODE"))
+        if (accessCode.Equals("TEST"))
         {
             var testTicket = new AdmissionTicket
             {
                 Id = Guid.NewGuid(),
-                Code = "TESTCODE",
+                Code = "TEST",
                 Used = false,
                 MeetingId = meeting.Id
             };
