@@ -1,20 +1,15 @@
 ﻿import React from "react";
-import { Box, Card, CardContent, CardHeader, Chip, Divider, List, ListItem, ListItemButton, ListItemText, Typography, Button } from "@mui/material";
-import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
-import StopRoundedIcon from "@mui/icons-material/StopRounded";
-import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
+import { Box, Card, CardContent, CardHeader, Chip, Divider, List, ListItem, ListItemButton, ListItemText, Typography } from "@mui/material";
 
-import { 
-    useStartVoteAndCreateVotationMutation, 
-    useStopVotationMutation, 
-    useStartReVoteMutation,
-    useGetOpenVotationsByMeetingIdQuery 
-} from "../../../../../Redux/votationApi.ts";
+import { useGetOpenVotationsByMeetingIdQuery } from "../../../../../Redux/votationApi.ts";
+import { AdminLivePropositionControls } from "./AdminLivePropositionControls.tsx";
 import type { AgendaItemFull } from "../../../../../domain/agenda.ts";
 import type { PropositionDto } from "../../../../../domain/propositions.ts";
+import type { MeetingDto } from "../../../../../domain/meetings.ts";
 
 type Props = {
     meetingId: string;
+    meeting: MeetingDto;
     selectedAgenda: AgendaItemFull | null;
     selectedProposition: PropositionDto | null;
     setSelectedProposition: React.Dispatch<React.SetStateAction<PropositionDto | null>>;
@@ -22,50 +17,13 @@ type Props = {
 
 export function AdminLivePropositionPane({
     meetingId,
+    meeting,
     selectedAgenda,
     selectedProposition,
     setSelectedProposition,
 }: Props) {
 
     const { data: openVotations = [] } = useGetOpenVotationsByMeetingIdQuery(meetingId);
-    const [startVote, { isLoading: isOpeningVote }] = useStartVoteAndCreateVotationMutation();
-    const [stopVote, { isLoading: isClosingVote }] = useStopVotationMutation();
-    const [startReVote] = useStartReVoteMutation();
-    const openVotation = openVotations.find(v => v.meetingId === meetingId);
-    const isSelectedPropositionOpen = !!(openVotation && selectedProposition && openVotation.propositionId === selectedProposition.id);
-
-    const handleOpenVote = async () => {
-        if (!selectedProposition) return;
-        try {
-            await startVote({ meetingId, propositionId: selectedProposition.id }).unwrap();
-        } catch (error) {
-            console.error("Failed to open vote:", error);
-        }
-    };
-
-    const handleCloseVote = async () => {
-        if (!selectedProposition) return;
-        try {
-            await stopVote(selectedProposition.id).unwrap();
-        } catch (error) {
-            console.error("Failed to close vote:", error);
-        }
-    };
-
-    const handleReVote = async () => {
-        if (!selectedProposition) return;
-        try {
-            await startReVote(selectedProposition.id).unwrap();
-        } catch (error) {
-            console.error("Failed to start re-vote:", error);
-        }
-    };
-
-    const hasOpenVotation = openVotations.length > 0;
-    const canOpenVote = selectedProposition && !hasOpenVotation && !selectedProposition.latestVotation?.open;
-    const canCloseVote = selectedProposition && isSelectedPropositionOpen;
-    const canReVote = selectedProposition?.latestVotation && !selectedProposition.latestVotation.open;
-
     return (
         <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Card elevation={1} className="rounded-2xl" sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -84,8 +42,8 @@ export function AdminLivePropositionPane({
                         )}
 
                         {(selectedAgenda?.propositions ?? []).map((p: PropositionDto, pIdx: number) => {
-                            // Check if this proposition is currently open for voting
-                            const isOpenForVoting = openVotation && openVotation.propositionId === p.id;
+                            // Check if this proposition is currently open for voting (search openVotations)
+                            const isOpenForVoting = openVotations?.some(v => v.propositionId === p.id && v.open);
                             
                             return (
                                 <React.Fragment key={p.id}>
@@ -147,44 +105,12 @@ export function AdminLivePropositionPane({
                     </List>
                 </CardContent>
 
-                {/* Inline vote controls */}
-                {selectedProposition && (
-                    <>
-                        <Divider />
-                        <Box sx={{ p: 2, display: 'flex', gap: 1, flexWrap: 'wrap', bgcolor: (t) => t.palette.background.default }}>
-                            <Button
-                                variant="contained"
-                                color="success"
-                                size="small"
-                                startIcon={<PlayArrowRoundedIcon />}
-                                disabled={!canOpenVote || isOpeningVote}
-                                onClick={handleOpenVote}
-                            >
-                                {isOpeningVote ? "Opening..." : "Open Vote"}
-                            </Button>
-                            <Button
-                                variant="outlined"
-                                color="error"
-                                size="small"
-                                startIcon={<StopRoundedIcon />}
-                                disabled={!canCloseVote || isClosingVote}
-                                onClick={handleCloseVote}
-                            >
-                                {isClosingVote ? "Closing..." : "Close Vote"}
-                            </Button>
-                            <Box sx={{ flex: 1 }} />
-                            <Button
-                                variant="outlined"
-                                size="small"
-                                startIcon={<ReplayRoundedIcon />}
-                                disabled={!canReVote}
-                                onClick={handleReVote}
-                            >
-                                Re-vote
-                            </Button>
-                        </Box>
-                    </>
-                )}
+                {/* Vote controls - delegated to AdminLivePropositionControls */}
+                <AdminLivePropositionControls
+                    meetingId={meetingId}
+                    meeting={meeting}
+                    selectedProposition={selectedProposition}
+                />
             </Card>
         </Box>
     );

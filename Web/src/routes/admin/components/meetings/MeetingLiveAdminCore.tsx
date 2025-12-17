@@ -35,8 +35,6 @@ export default function MeetingLiveAdminCore({ meeting, agendaList }: MeetingLiv
 
     const [startMeeting, { isLoading: isStarting }] = useStartMeetingMutation();
     const [stopMeeting, { isLoading: isStopping }] = useStopMeetingMutation();
-
-    // Fetch open votations to highlight active agenda/proposition
     const { data: openVotations = [] } = useGetOpenVotationsByMeetingIdQuery(meeting.id);
     const openVotation = openVotations.find(v => v.meetingId === meeting.id);
 
@@ -67,7 +65,7 @@ export default function MeetingLiveAdminCore({ meeting, agendaList }: MeetingLiv
                     Back
                 </Button>
                 <Typography variant="h5" fontWeight={700} sx={{ flex: 1 }}>
-                    {meeting.title} — Live Administration
+                    Live Administration: {meeting.title} - Meeting Code {meeting.meetingCode}
                 </Typography>
                 <Button
                     variant={meeting.started ? "outlined" : "contained"}
@@ -109,6 +107,7 @@ export default function MeetingLiveAdminCore({ meeting, agendaList }: MeetingLiv
                     />
                     <AdminLivePropositionPane
                         meetingId={meeting.id}
+                        meeting={meeting}
                         selectedAgenda={selectedAgenda}
                         selectedProposition={selectedProposition}
                         setSelectedProposition={setSelectedProposition}

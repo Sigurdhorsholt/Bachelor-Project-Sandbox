@@ -16,7 +16,7 @@ namespace Application.Services;
 
 public class AuthService : IAuthService
 {
-    private readonly AppDbContext _db;
+    private AppDbContext _db;
     private readonly string _issuer;
     private readonly SymmetricSecurityKey _key;
 

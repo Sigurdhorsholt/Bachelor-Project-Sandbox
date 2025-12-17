@@ -10,7 +10,7 @@ namespace Application.Services;
 /// </summary>
 public class VotingService : IVotingService
 {
-    private readonly AppDbContext _db;
+    private AppDbContext _db;
     private readonly ILogger<VotingService> _logger;
 
     public VotingService(AppDbContext db, ILogger<VotingService> logger)
@@ -23,20 +23,15 @@ public class VotingService : IVotingService
 
     public async Task<CastVoteResult> CastVoteAsync(Guid meetingId, Guid propositionId, Guid voteOptionId, string code)
     {
-        // Resolve admission ticket (handle test codes and real codes)
         var (ticketEntity, isTestRequest, generatedTestTicketCode) = 
             await ResolveAdmissionTicketAsync(code, meetingId);
 
-        // Validate votation exists and is open
         var votation = await ValidateVotationAsync(meetingId, propositionId);
 
-        // Validate vote option belongs to proposition
         await ValidateVoteOptionAsync(voteOptionId, propositionId);
 
-        // Check if ticket has already voted in this votation
         var existingBallot = await FindExistingBallotAsync(ticketEntity.Id, votation.Id, isTestRequest);
 
-        // Cast or update the vote
         if (existingBallot != null)
         {
             return await UpdateExistingVoteAsync(existingBallot, voteOptionId, ticketEntity, votation, isTestRequest);
@@ -49,37 +44,32 @@ public class VotingService : IVotingService
 
     public async Task<VotationResultsDto> GetVotationResultsAsync(Guid votationId)
     {
-        // Load votation with proposition and options
         var (votation, proposition) = await LoadVotationWithPropositionAsync(votationId);
-
-        // Get all ballots for this votation
+        if (votation.Overwritten)
+        {
+            throw new InvalidOperationException("This votation has been overwritten by a re-vote and no longer has valid results.");
+        }
+        
         var ballots = await GetBallotsForVotationAsync(votationId);
-
-        // Calculate results for each option
+        
         var results = CalculateVoteResults(proposition.Options, ballots);
 
-        // Build and return results DTO
         return BuildVotationResultsDto(votation, proposition, ballots, results);
     }
 
     public async Task<VoteCheckResult> CheckIfVotedAsync(string code, Guid votationId)
     {
-        // Resolve ticket (test or real)
         var ticket = await ResolveTicketForCheckAsync(code, votationId);
 
-        // Find existing ballot for this ticket and votation
         var ballot = await FindBallotForTicketAsync(ticket.Id, votationId);
 
-        // Build and return check result
         return BuildVoteCheckResult(ballot, votationId);
     }
 
     public async Task<List<VoteDetailsDto>> GetAllVotesForMeetingAsync(Guid meetingId)
     {
-        // Validate meeting exists
         await ValidateMeetingExistsAsync(meetingId);
 
-        // Load and map all votes for the meeting
         var votes = await LoadVotesForMeetingAsync(meetingId);
 
         return votes;
@@ -91,13 +81,10 @@ public class VotingService : IVotingService
 
         try
         {
-            // Load ballot with all necessary includes
             var ballot = await LoadBallotForRevocationAsync(ballotId);
 
-            // Validate ballot can be revoked
             ValidateBallotCanBeRevoked(ballot);
 
-            // Perform revocation
             await PerformBallotRevocationAsync(ballot);
 
             await tx.CommitAsync();
@@ -114,20 +101,16 @@ public class VotingService : IVotingService
 
     public async Task<VotationStartResult> StartVotationAsync(Guid meetingId, Guid propositionId)
     {
-        // Validate meeting and proposition exist
         await ValidateMeetingAndPropositionAsync(meetingId, propositionId);
 
         await using var tx = await _db.Database.BeginTransactionAsync();
 
         try
         {
-            // Check and prevent duplicate open votations
             await EnsureNoOpenVotationExistsAsync(meetingId, propositionId);
 
-            // Mark any existing votations as overwritten
             await MarkExistingVotationsAsOverwrittenIfNeededAsync(meetingId, propositionId);
 
-            // Create and save new votation
             var votation = await CreateAndSaveVotationAsync(meetingId, propositionId);
 
             await tx.CommitAsync();
@@ -149,10 +132,8 @@ public class VotingService : IVotingService
 
     public async Task<VotationStopResult> StopVotationAsync(Guid propositionId)
     {
-        // Find the latest open votation
         var votation = await FindLatestOpenVotationAsync(propositionId);
 
-        // Close the votation
         CloseVotation(votation);
 
         await _db.SaveChangesAsync();
@@ -193,7 +174,6 @@ public class VotingService : IVotingService
 
     public async Task<List<VotationDto>> GetVotationsByPropositionAsync(Guid meetingId, Guid propositionId)
     {
-        // Validate meeting and proposition exist
         await ValidateMeetingAndPropositionAsync(meetingId, propositionId);
 
         var votations = await _db.Votations
@@ -206,10 +186,8 @@ public class VotingService : IVotingService
 
     public async Task<RevoteResult> StartRevoteAsync(Guid propositionId)
     {
-        // Find the latest votation for tracking
         var latest = await FindLatestVotationAsync(propositionId);
 
-        // Close all open votations for this proposition
         var closedCount = await CloseOpenVotationsForPropositionAsync(propositionId);
 
         _logger.LogInformation(
@@ -225,20 +203,16 @@ public class VotingService : IVotingService
 
         try
         {
-            // Validate votation exists and is open
             var votation = await ValidateVotationForManualBallotsAsync(votationId);
 
-            // Validate all vote options belong to this votation's proposition
             await ValidateVoteOptionsForVotationAsync(votation.PropositionId, optionCounts.Keys.ToList());
 
-            // Validate all counts are positive
             ValidateOptionCounts(optionCounts);
 
             var recordedAtUtc = DateTime.UtcNow;
             var totalAdded = 0;
             var countsByOption = new Dictionary<Guid, int>();
 
-            // Create ballots for each option and count
             foreach (var (optionId, count) in optionCounts)
             {
                 if (count <= 0) continue;
@@ -252,7 +226,6 @@ public class VotingService : IVotingService
                 countsByOption[optionId] = count;
             }
 
-            // Create audit event for manual ballot addition
             if (totalAdded > 0)
             {
                 await CreateManualBallotAuditEventAsync(votation, countsByOption, totalAdded, notes, recordedAtUtc);
@@ -752,15 +725,20 @@ public class VotingService : IVotingService
 
     private async Task<int> CloseOpenVotationsForPropositionAsync(Guid propositionId)
     {
+
         var existingVotations = await _db.Votations
-            .Where(v => v.PropositionId == propositionId && v.Open && !v.Overwritten)
+            .Where(v => v.PropositionId == propositionId && !v.Overwritten)
             .ToListAsync();
 
         foreach (var v in existingVotations)
         {
             v.Overwritten = true;
-            v.Open = false;
-            v.EndedAtUtc = DateTime.UtcNow;
+            // Only close if it was open
+            if (v.Open)
+            {
+                v.Open = false;
+                v.EndedAtUtc = DateTime.UtcNow;
+            }
         }
 
         await _db.SaveChangesAsync();
@@ -770,11 +748,9 @@ public class VotingService : IVotingService
 
     private async Task PerformBallotRevocationAsync(Ballot ballot)
     {
-        // Create revocation audit event before deleting
         CreateOrUpdateRevocationAuditEvent(ballot);
         await _db.SaveChangesAsync();
 
-        // Delete cascade will handle Vote and AuditableEvents
         _db.Ballots.Remove(ballot);
         await _db.SaveChangesAsync();
     }
@@ -882,13 +858,11 @@ public class VotingService : IVotingService
     {
         await using var txCreate = await _db.Database.BeginTransactionAsync();
 
-        // If this is a TEST request, persist the generated ticket
         if (isTestRequest)
         {
             _db.AdmissionTickets.Add(ticketEntity);
         }
 
-        // Create ballot + vote (skip audit for test tickets)
         var skipAudit = isTestRequest;
         var (ballot, vote) = await CreateBallotAndVoteAsync(ticketEntity, votation, voteOptionId, skipAudit);
 

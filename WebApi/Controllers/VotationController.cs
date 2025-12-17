@@ -173,32 +173,54 @@ public class VotationController : ControllerBase
     }
 
     /// <summary>
-    /// Start a re-vote for a proposition (closes existing votations and marks them as overwritten)
+    /// Start a re-vote for a proposition (closes existing votations and marks them as overwritten, then starts a new votation)
     /// </summary>
     [HttpPost("revote/{propositionId:guid}")]
     public async Task<IActionResult> StartReVote(Guid propositionId)
     {
         try
         {
-            var result = await _votingService.StartRevoteAsync(propositionId);
+            var closeResult = await _votingService.StartRevoteAsync(propositionId);
 
-            // If we closed an open votation, broadcast that it stopped
-            if (result.LatestVotationId.HasValue && result.MeetingId.HasValue && result.EndedAtUtc.HasValue)
+            if (closeResult.LatestVotationId.HasValue && closeResult.MeetingId.HasValue && closeResult.EndedAtUtc.HasValue)
             {
                 await _broadcast.MeetingVotationStopped(
-                    result.MeetingId.Value.ToString(),
+                    closeResult.MeetingId.Value.ToString(),
                     propositionId.ToString(),
-                    result.LatestVotationId.Value.ToString(),
-                    result.EndedAtUtc.Value);
+                    closeResult.LatestVotationId.Value.ToString(),
+                    closeResult.EndedAtUtc.Value);
+            }
+
+            // start a new votation if we have a meetingId
+            if (closeResult.MeetingId.HasValue)
+            {
+                var startResult = await _votingService.StartVotationAsync(closeResult.MeetingId.Value, propositionId);
+                
+                // Broadcast the new votation opened event
+                await _broadcast.MeetingPropositionOpened(
+                    closeResult.MeetingId.Value.ToString(),
+                    propositionId.ToString(),
+                    startResult.VotationId.ToString());
+
+                return Ok(new
+                {
+                    Message = $"Re-vote started: Closed {closeResult.ClosedVotationsCount} votation(s) and created new votation",
+                    ClosedVotationsCount = closeResult.ClosedVotationsCount,
+                    NewVotationId = startResult.VotationId,
+                    MeetingId = startResult.MeetingId,
+                    PropositionId = startResult.PropositionId,
+                    StartedAtUtc = startResult.StartedAtUtc,
+                    Open = startResult.Open
+                });
             }
 
             return Ok(new
             {
-                Message = $"Closed {result.ClosedVotationsCount} votation(s)",
-                result.ClosedVotationsCount,
-                result.LatestVotationId,
-                result.MeetingId,
-                result.PropositionId
+                Message = $"Closed {closeResult.ClosedVotationsCount} votation(s)",
+                closeResult.ClosedVotationsCount,
+                closeResult.LatestVotationId,
+                closeResult.MeetingId,
+                closeResult.PropositionId
             });
         }
         catch (Exception ex)
@@ -221,8 +243,6 @@ public class VotationController : ControllerBase
             }
 
             var result = await _votingService.AddManualBallotsAsync(votationId, request.Counts, request.Notes);
-
-            // Broadcast vote cast event to trigger real-time updates
             var votation = await _votingService.GetVotationAsync(votationId);
             if (votation != null)
             {
