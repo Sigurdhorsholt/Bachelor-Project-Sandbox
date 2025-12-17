@@ -1,7 +1,5 @@
 import { api } from "./api";
 
-/* -------------------- Types -------------------- */
-
 export type CastVoteRequest = {
     meetingId: string;
     propositionId: string;

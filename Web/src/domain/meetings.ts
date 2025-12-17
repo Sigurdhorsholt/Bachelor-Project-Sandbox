@@ -1,7 +1,3 @@
-// src/domain/meetings.ts
-// Meeting status values (numeric mapping to backend enum) - erasable safe
-import type {PropositionDto} from "./propositions.ts";
-import type {AgendaItemFull} from "./agenda.ts";
 
 export const MeetingStatusValues = {
   Draft: 0,
@@ -10,9 +6,8 @@ export const MeetingStatusValues = {
   Finished: 3,
 } as const;
 export type MeetingStatus = typeof MeetingStatusValues[keyof typeof MeetingStatusValues];
-export type MeetingStatusName = keyof typeof MeetingStatusValues; // "Draft" | ...
+export type MeetingStatusName = keyof typeof MeetingStatusValues;
 
-// Single meeting DTO (backend returns numeric Status for single meeting endpoint)
 export type MeetingDto = {
   id: string;
   divisionId: string;
@@ -23,20 +18,18 @@ export type MeetingDto = {
   started: number;
 };
 
-// List item DTO (division meetings list returns string Status)
 export type MeetingListItemDto = {
   id: string;
   title: string;
   startsAtUtc: string;
-  status: MeetingStatusName; // string name
-  meetingCode?: string | undefined; // optional meeting code if backend includes it
+  status: MeetingStatusName;
+  meetingCode?: string | undefined;
 };
 
-// Create meeting request (uses string enum via backend JsonStringEnumConverter)
 export type CreateMeetingPayload = {
   divisionId: string;
   title: string;
-  startsAtUtc: string; // ISO UTC
+  startsAtUtc: string;
   status: MeetingStatusName;
 };
 

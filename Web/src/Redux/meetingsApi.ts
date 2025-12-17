@@ -127,8 +127,6 @@ export const meetingsApi = api.injectEndpoints({
             query: ({ meetingId, propositionId }) => `/votation/by-proposition/${meetingId}/${propositionId}`,
             providesTags: (_r, _e, { propositionId }) => [{ type: "Votations", id: propositionId }],
             transformResponse: (raw: any) => {
-                // backend returns PascalCase fields (Id, MeetingId, PropositionId, StartedAtUtc, EndedAtUtc, Open, Overwritten)
-                // Normalize to camelCase used across the frontend
                 if (!Array.isArray(raw)) return [];
                 return raw.map((v: any) => ({
                     id: v.id ?? v.Id,
@@ -379,10 +377,7 @@ type StatusName = typeof statusNames[number];
 function normalizeStatus(raw: any): StatusName {
     switch (typeof raw) {
         case "string": {
-            // exact name ("Draft", "Scheduled"...)
             if (statusNames.includes(raw as StatusName)) return raw as StatusName;
-
-            // numeric string?
             const num = Number(raw);
             if (!Number.isNaN(num)) {
                 return statusNames[num] ?? "Draft";
@@ -390,11 +385,9 @@ function normalizeStatus(raw: any): StatusName {
 
             return "Draft";
         }
-
         case "number": {
             return statusNames[raw] ?? "Draft";
         }
-
         default:
             return "Draft";
     }
