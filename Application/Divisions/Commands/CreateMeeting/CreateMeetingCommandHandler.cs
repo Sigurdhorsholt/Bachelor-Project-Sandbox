@@ -16,11 +16,13 @@ public class CreateMeetingCommandHandler : IRequestHandler<CreateMeetingCommand,
 {
     private readonly AppDbContext _db;
     private readonly IMeetingCodeService _meetingCodeService;
+    private readonly IAdmissionTicketService _admissionTicketService;
 
-    public CreateMeetingCommandHandler(AppDbContext db, IMeetingCodeService meetingCodeService)
+    public CreateMeetingCommandHandler(AppDbContext db, IMeetingCodeService meetingCodeService, IAdmissionTicketService admissionTicketService)
     {
         _db = db;
         _meetingCodeService = meetingCodeService;
+        _admissionTicketService = admissionTicketService;
     }
 
     public async Task<CreateMeetingResult> Handle(CreateMeetingCommand request, CancellationToken cancellationToken)
@@ -66,6 +68,9 @@ public class CreateMeetingCommandHandler : IRequestHandler<CreateMeetingCommand,
             {
                 await _db.SaveChangesAsync(cancellationToken);
 
+                // Create a TEST admission ticket for the newly created meeting
+                await _admissionTicketService.CreateWithCodeAsync(meeting.Id, "TEST", cancellationToken);
+
                 return new CreateMeetingResult(meeting.Id, meeting.Title, meeting.StartsAtUtc, meeting.Status.ToString(), meeting.MeetingCode);
             }
             catch (DbUpdateException)
@@ -82,4 +87,3 @@ public class CreateMeetingCommandHandler : IRequestHandler<CreateMeetingCommand,
         throw new InvalidOperationException("Failed to create meeting.");
     }
 }
-

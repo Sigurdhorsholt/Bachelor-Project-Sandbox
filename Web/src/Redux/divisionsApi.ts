@@ -1,10 +1,8 @@
-// src/Redux/divisionsApi.ts
 import { api } from "./api";
 
 export type Division = {
     id: string;
     name: string;
-    // add more fields when your backend exposes them
 };
 
 export const divisionsApi = api.injectEndpoints({
@@ -24,7 +22,6 @@ export const divisionsApi = api.injectEndpoints({
                 method: "POST",
                 body: { name },
             }),
-            // after success, invalidate the list tag so getDivisions refetches
             invalidatesTags: (_result, _err, { orgId }) => [{ type: "Division", id: `LIST-${orgId}` }],
         }),
         

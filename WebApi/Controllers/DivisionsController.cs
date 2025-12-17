@@ -48,7 +48,8 @@ public class DivisionsController : ControllerBase
         {
             var cmd = new CreateMeetingCommand(divisionId, req.Title, req.StartsAtUtc, req.Status);
             var result = await _mediator.Send(cmd);
-
+            
+            
             return Ok(new
             {
                 result.Id,

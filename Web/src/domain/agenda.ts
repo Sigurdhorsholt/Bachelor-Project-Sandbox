@@ -1,4 +1,3 @@
-// src/domain/agenda.ts
 import type {PropositionDto} from "./propositions.ts";
 
 export type AgendaItemDto = {

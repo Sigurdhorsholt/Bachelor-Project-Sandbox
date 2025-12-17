@@ -1,110 +1,123 @@
 ﻿import React from "react";
-import {Box, Button, Divider, IconButton, Typography, Chip} from "@mui/material";
+import {Box, Button, Divider} from "@mui/material";
 import PlayArrowRoundedIcon from "@mui/icons-material/PlayArrowRounded";
 import StopRoundedIcon from "@mui/icons-material/StopRounded";
-
 import ReplayRoundedIcon from "@mui/icons-material/ReplayRounded";
-import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
-import type {AgendaItemFull} from "../../../../../domain/agenda.ts";
+
+import {
+    useStartVoteAndCreateVotationMutation,
+    useStopVotationMutation,
+    useStartReVoteMutation,
+    useGetOpenVotationsByMeetingIdQuery
+} from "../../../../../Redux/votationApi.ts";
 import type {PropositionDto} from "../../../../../domain/propositions.ts";
-import type {VotationResultsDto} from "../../../../../Redux/votationApi.ts";
+import type {MeetingDto} from "../../../../../domain/meetings.ts";
 
 type Props = {
-    selectedAgenda: AgendaItemFull | null;
-    selectedProposition?: PropositionDto;
-    showResults: boolean;
-    setShowResults: React.Dispatch<React.SetStateAction<boolean>>;
-    handleOpenVote: () => void;
-    handleCloseVote: () => void;
-    handleStartReVote: () => void;
-    isOpeningVote: boolean;
-    isClosingVote: boolean;
-    hasOpenVotation: boolean;
-    isSelectedPropositionOpen?: boolean;
-    voteResults?: VotationResultsDto;
+    meetingId: string;
+    meeting: MeetingDto;
+    selectedProposition: PropositionDto | null;
 };
 
 export function AdminLivePropositionControls({
-                                                 selectedAgenda,
-                                                 selectedProposition,
-                                                 showResults,
-                                                 setShowResults,
-                                                 handleOpenVote,
-                                                 handleCloseVote,
-                                                 handleStartReVote,
-                                                 isOpeningVote,
-                                                 isClosingVote,
-                                                 hasOpenVotation,
-                                                 isSelectedPropositionOpen,
-                                                 voteResults,
-                                             }: Props) {
-    const hasSelection = !!(selectedAgenda && selectedProposition);
-    const openDisabled = !hasSelection || hasOpenVotation || isOpeningVote || isClosingVote;
-    const closeDisabled = !hasSelection || !hasOpenVotation || !isSelectedPropositionOpen || isOpeningVote || isClosingVote;
-    const voteHasResults = Boolean(voteResults && voteResults.open === false);
-    const canReVote = Boolean(voteResults && voteResults.open === false);
+                                               meetingId,
+                                               meeting,
+                                               selectedProposition,
+                                           }: Props) {
+    const {data: openVotations = []} = useGetOpenVotationsByMeetingIdQuery(meetingId);
+    const [startVote, {isLoading: isOpeningVote}] = useStartVoteAndCreateVotationMutation();
+    const [stopVote, {isLoading: isClosingVote}] = useStopVotationMutation();
+    const [startReVote, {isLoading: isReVoting}] = useStartReVoteMutation();
+
+    const hasOpenVotation = openVotations.some(v => v.open);
+    const openVotationForSelected = selectedProposition ? openVotations.find(v => v.propositionId === selectedProposition.id) : undefined;
+    const isSelectedPropositionOpen = !!openVotationForSelected;
+
+    const handleOpenVote = async () => {
+        if (!selectedProposition) return;
+        try {
+            await startVote({meetingId, propositionId: selectedProposition.id}).unwrap();
+        } catch (error) {
+            console.error("Failed to open vote:", error);
+        }
+    };
+
+    const handleCloseVote = async () => {
+        if (!selectedProposition) return;
+        try {
+            await stopVote(selectedProposition.id).unwrap();
+        } catch (error) {
+            console.error("Failed to close vote:", error);
+        }
+    };
+
+    const handleReVote = async () => {
+        if (!selectedProposition) return;
+        try {
+            const res = await startReVote({ propositionId: selectedProposition.id, meetingId }).unwrap();
+            // RTK Query invalidation should refresh agenda/latestVotation and open votations
+            console.debug("Re-vote response:", res);
+        } catch (error) {
+            console.error("Failed to start re-vote:", error);
+        }
+    };
+
+
+    // A votation has results if the selected proposition has a latestVotation that is closed and not overwritten
+    const hasClosedVotation = !!(selectedProposition?.latestVotation && !selectedProposition.latestVotation.open && !selectedProposition.latestVotation.overwritten);
+    const isMeetingStarted = !!meeting.started;
+
+    // Open vote is enabled when:
+    // - Meeting is started
+    // - Proposition is selected
+    // - No votation is currently open for ANY proposition in the meeting
+    // - Selected proposition doesn't have a closed votation with valid results (not overwritten)
+    const canOpenVote = isMeetingStarted && !!selectedProposition && !hasOpenVotation && !hasClosedVotation;
+
+    const canCloseVote = !!selectedProposition && isSelectedPropositionOpen;
+
+    // Re-vote is enabled when:
+    // - Proposition has a closed votation with results (not overwritten)
+    // - No votation is currently open (re-vote will create a new one)
+    const canReVote = hasClosedVotation && !hasOpenVotation;
+
+    if (!selectedProposition) return null;
 
     return (
-        <Box sx={{p: 2, bgcolor: (t) => t.palette.background.paper}}>
+        <>
             <Divider/>
-            <Box sx={{display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center', mt: 1}}>
+            <Box sx={{p: 2, display: 'flex', gap: 1, flexWrap: 'wrap', bgcolor: (t) => t.palette.background.default}}>
                 <Button
                     variant="contained"
-                    startIcon={isOpeningVote ? <PlayArrowRoundedIcon/> : <PlayArrowRoundedIcon/>}
-                    disabled={openDisabled || voteHasResults}
+                    color="success"
+                    size="small"
+                    startIcon={<PlayArrowRoundedIcon/>}
+                    disabled={!canOpenVote || isOpeningVote}
                     onClick={handleOpenVote}
                 >
-                    {isOpeningVote ? "Opening..." : "Open vote"}
+                    {isOpeningVote ? "Opening..." : "Open Vote"}
                 </Button>
-
                 <Button
                     variant="outlined"
+                    color="error"
+                    size="small"
                     startIcon={<StopRoundedIcon/>}
-                    disabled={closeDisabled}
+                    disabled={!canCloseVote || isClosingVote}
                     onClick={handleCloseVote}
                 >
-                    {isClosingVote ? "Closing..." : "Close vote"}
+                    {isClosingVote ? "Closing..." : "Close Vote"}
                 </Button>
-
                 <Box sx={{flex: 1}}/>
-                <IconButton size="small" onClick={() => setShowResults((s) => !s)}
-                            title={showResults ? 'Hide results' : 'Show results'}>
-                    <VisibilityRoundedIcon color={showResults ? 'primary' : 'inherit'}/>
-                </IconButton>
-            </Box>
-
-            {/* Optional brief results preview when toggled on */}
-            {showResults && (
-                <Box sx={{mt: 2}}>
-                    <Typography variant="caption" color="text.secondary">Results preview</Typography>
-                    {voteResults && voteResults.results && voteResults.results.length > 0 ? (
-                        <Box sx={{mt: 1}}>
-                            {voteResults.results.map((r: any) => (
-                                <Box key={r.voteOptionId}
-                                     sx={{display: 'flex', justifyContent: 'space-between', py: 0.5}}>
-                                    <Typography variant="body2">{r.label}</Typography>
-                                    <Chip size="small" label={r.count} color={r.count > 0 ? 'primary' : 'default'}/>
-                                </Box>
-                            ))}
-                        </Box>
-                    ) : (
-                        <Typography variant="caption" color="text.secondary">No results available</Typography>
-                    )}
-                </Box>
-            )}
-
-            {/* Re-vote button */}
-            <Box sx={{mt: 2}}>
-                <Button variant="outlined"
-                        color="primary"
-                        startIcon={<ReplayRoundedIcon/>}
-                        fullWidth
-                        onClick={handleStartReVote}
-                        disabled={!canReVote}
+                <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<ReplayRoundedIcon/>}
+                    disabled={!canReVote || isReVoting}
+                    onClick={handleReVote}
                 >
-                    Start re-vote
+                    {isReVoting ? "Re-voting..." : "Re-vote"}
                 </Button>
             </Box>
-        </Box>
+        </>
     );
 }

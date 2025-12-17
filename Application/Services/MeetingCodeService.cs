@@ -6,7 +6,7 @@ namespace Application.Services;
 
 public class MeetingCodeService : IMeetingCodeService
 {
-    private readonly AppDbContext _dbContext;
+    private AppDbContext _dbContext;
     private static readonly char[] Alph = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray();
     private readonly int _length = 6;
 

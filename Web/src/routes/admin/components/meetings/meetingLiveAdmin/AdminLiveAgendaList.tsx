@@ -22,7 +22,7 @@ export function AdminLiveAgendaList({ agenda, selectedAgenda, onSelectAgenda, op
                     <List disablePadding>
                         {agenda.map((a: any, aIdx: number) => {
                             // Check if this agenda item contains a proposition that is currently open for voting
-                            const hasOpenVoting = openVotationPropositionId && 
+                            const hasOpenVoting = openVotationPropositionId &&
                                 a.propositions?.some((p: any) => p.id === openVotationPropositionId);
                             
                             return (
@@ -43,8 +43,8 @@ export function AdminLiveAgendaList({ agenda, selectedAgenda, onSelectAgenda, op
                                                 }),
                                                 '&.Mui-selected': {
                                                     bgcolor: (t) => hasOpenVoting ? t.palette.success.light : t.palette.primary.light,
-                                                    borderLeft: (t) => hasOpenVoting 
-                                                        ? `4px solid ${t.palette.success.main}` 
+                                                    borderLeft: (t) => hasOpenVoting
+                                                        ? `4px solid ${t.palette.success.main}`
                                                         : `4px solid ${t.palette.primary.main}`,
                                                     pl: 1.5,
                                                     color: (t) => t.palette.primary.contrastText,

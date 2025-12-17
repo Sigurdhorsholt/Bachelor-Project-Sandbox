@@ -16,7 +16,7 @@ namespace Application.Services;
 
 public class AuthService : IAuthService
 {
-    private readonly AppDbContext _db;
+    private AppDbContext _db;
     private readonly string _issuer;
     private readonly SymmetricSecurityKey _key;
 
@@ -76,12 +76,12 @@ public class AuthService : IAuthService
 
         var isTestMode = false;
 
-        if (accessCode.Equals("TESTCODE"))
+        if (accessCode.Equals("TEST"))
         {
             var testTicket = new AdmissionTicket
             {
                 Id = Guid.NewGuid(),
-                Code = "TESTCODE",
+                Code = "TEST",
                 Used = false,
                 MeetingId = meeting.Id
             };
