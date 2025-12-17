@@ -1,60 +1,76 @@
-import React from "react";
+import React, { useState } from "react";
 import {
     Paper, Box, Typography, Button, Table, TableHead, TableRow, TableCell, TableBody, Chip,
     IconButton, Tooltip, Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import { useGetMeetingsQuery, useCreateMeetingMutation } from "../../../../Redux/meetingsApi";
 
-// Reuse the SAME union everywhere
 export type MeetingStatus = "Draft" | "Scheduled" | "Published" | "Finished";
 
-// Keep this component-local Meeting shape (UI-facing)
-export type Meeting = { id: string; title: string; startsAt: string; status: MeetingStatus };
+type MeetingFormData = { 
+    title: string; 
+    startsAt: string; 
+    status: MeetingStatus;
+};
 
-type Props = {
-    meetings: Meeting[];
+type MeetingsTableProps = {
+    divisionId: string;
     selectedMeetingId: string;
-    onSelectMeeting: (id: string) => void;
-    onCreateMeeting?: (meeting: Omit<Meeting, "id">) => Promise<void> | void;
+    onSelectMeeting: (meetingId: string) => void;
 };
 
 export default function MeetingsTable({
-                                          meetings, selectedMeetingId, onSelectMeeting, onCreateMeeting,
-                                      }: Props) {
-    const fmt = (iso: string) => new Date(iso).toLocaleString();
+    divisionId,
+    selectedMeetingId,
+    onSelectMeeting,
+}: MeetingsTableProps) {
+    const { data: meetings = [], isFetching: isLoadingMeetings } = useGetMeetingsQuery(divisionId, {
+        skip: !divisionId,
+    });
 
-    // --- Dialog state ---
-    const [open, setOpen] = React.useState(false);
-    const [submitting, setSubmitting] = React.useState(false);
-    const [form, setForm] = React.useState<{ title: string; startsAt: string; status: MeetingStatus }>({
+    const [createMeeting] = useCreateMeetingMutation();
+
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [formData, setFormData] = useState<MeetingFormData>({
         title: "",
         startsAt: "",
         status: "Draft",
     });
 
-    const canSubmit = form.title.trim().length > 1 && form.startsAt;
+    const formatDateTime = (isoString: string) => new Date(isoString).toLocaleString();
 
-    function handleOpen() { setOpen(true); }
-    function handleClose() {
-        if (submitting) return;
-        setOpen(false);
-        setForm({ title: "", startsAt: "", status: "Draft" });
-    }
+    const canSubmitForm = formData.title.trim().length > 1 && formData.startsAt;
+    const canCreateMeeting = !!divisionId;
 
-    async function handleCreate() {
-        if (!onCreateMeeting || !canSubmit) return;
+    const openCreateDialog = () => {
+        setIsDialogOpen(true);
+    };
+
+    const closeDialog = () => {
+        if (isSubmitting) return;
+        setIsDialogOpen(false);
+        setFormData({ title: "", startsAt: "", status: "Draft" });
+    };
+
+    const handleCreateMeeting = async () => {
+        if (!canSubmitForm || !canCreateMeeting) return;
+        
         try {
-            setSubmitting(true);
-            await onCreateMeeting({
-                title: form.title.trim(),
-                startsAt: form.startsAt,
-                status: form.status, // <- now typed as MeetingStatus
-            });
-            handleClose();
+            setIsSubmitting(true);
+            const startsAtUtc = new Date(formData.startsAt).toISOString();
+            await createMeeting({
+                divisionId,
+                title: formData.title.trim(),
+                startsAtUtc,
+                status: formData.status,
+            }).unwrap();
+            closeDialog();
         } finally {
-            setSubmitting(false);
+            setIsSubmitting(false);
         }
-    }
+    };
 
     return (
         <Paper elevation={1} className="rounded-2xl">
@@ -64,12 +80,16 @@ export default function MeetingsTable({
                     <Typography variant="subtitle1" className="!font-semibold">
                         Møder
                     </Typography>
-                    <Tooltip title={onCreateMeeting ? "Tilføj møde" : "Deaktiveret"}>
-            <span>
-              <IconButton size="small" onClick={handleOpen} disabled={!onCreateMeeting}>
-                <AddIcon fontSize="small" />
-              </IconButton>
-            </span>
+                    <Tooltip title={canCreateMeeting ? "Tilføj møde" : "Deaktiveret"}>
+                        <span>
+                            <IconButton 
+                                size="small" 
+                                onClick={openCreateDialog} 
+                                disabled={!canCreateMeeting}
+                            >
+                                <AddIcon fontSize="small" />
+                            </IconButton>
+                        </span>
                     </Tooltip>
                 </div>
                 <div className="flex items-center gap-2">
@@ -93,28 +113,33 @@ export default function MeetingsTable({
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {meetings.map(m => (
+                        {meetings.map(meeting => (
                             <TableRow
-                                key={m.id}
+                                key={meeting.id}
                                 hover
-                                selected={selectedMeetingId === m.id}
+                                selected={selectedMeetingId === meeting.id}
                                 className="cursor-pointer"
-                                onClick={() => onSelectMeeting(m.id)}
+                                onClick={() => onSelectMeeting(meeting.id)}
                             >
                                 <TableCell>
                                     <div className="flex flex-col">
-                                        <span className="font-medium">{m.title}</span>
-                                        <span className="sm:hidden text-xs text-slate-500">{fmt(m.startsAt)}</span>
+                                        <span className="font-medium">{meeting.title}</span>
+                                        <span className="sm:hidden text-xs text-slate-500">
+                                            {formatDateTime(meeting.startsAtUtc)}
+                                        </span>
                                     </div>
                                 </TableCell>
-                                <TableCell className="hidden sm:table-cell">{fmt(m.startsAt)}</TableCell>
-                                <TableCell><Chip size="small" label={m.status} variant="outlined" /></TableCell>
-                             
+                                <TableCell className="hidden sm:table-cell">
+                                    {formatDateTime(meeting.startsAtUtc)}
+                                </TableCell>
+                                <TableCell>
+                                    <Chip size="small" label={meeting.status} variant="outlined" />
+                                </TableCell>
                             </TableRow>
                         ))}
-                        {meetings.length === 0 && (
+                        {meetings.length === 0 && !isLoadingMeetings && (
                             <TableRow>
-                                <TableCell colSpan={4}>
+                                <TableCell colSpan={3}>
                                     <Typography variant="body2" className="!text-slate-500 py-4 text-center">
                                         Ingen møder i denne division.
                                     </Typography>
@@ -126,7 +151,7 @@ export default function MeetingsTable({
             </Box>
 
             {/* Add Meeting Dialog */}
-            <Dialog open={open} onClose={handleClose} fullWidth maxWidth="xs">
+            <Dialog open={isDialogOpen} onClose={closeDialog} fullWidth maxWidth="xs">
                 <DialogTitle>Tilføj møde</DialogTitle>
                 <DialogContent>
                     <Box sx={{ mt: 1 }}>
@@ -137,8 +162,8 @@ export default function MeetingsTable({
                                 size="small"
                                 variant="outlined"
                                 margin="dense"
-                                value={form.title}
-                                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                                value={formData.title}
+                                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                             />
 
                             <TextField
@@ -149,8 +174,8 @@ export default function MeetingsTable({
                                 variant="outlined"
                                 margin="dense"
                                 InputLabelProps={{ shrink: true }}
-                                value={form.startsAt}
-                                onChange={(e) => setForm({ ...form, startsAt: e.target.value })}
+                                value={formData.startsAt}
+                                onChange={(e) => setFormData({ ...formData, startsAt: e.target.value })}
                                 inputProps={{ placeholder: "ÅÅÅÅ-MM-DDTHH:mm" }}
                             />
 
@@ -161,8 +186,8 @@ export default function MeetingsTable({
                                 size="small"
                                 variant="outlined"
                                 margin="dense"
-                                value={form.status}
-                                onChange={(e) => setForm({ ...form, status: e.target.value as MeetingStatus })}
+                                value={formData.status}
+                                onChange={(e) => setFormData({ ...formData, status: e.target.value as MeetingStatus })}
                             >
                                 <MenuItem value="Draft">Udkast</MenuItem>
                                 <MenuItem value="Scheduled">Planlagt</MenuItem>
@@ -174,16 +199,16 @@ export default function MeetingsTable({
                 </DialogContent>
 
                 <DialogActions>
-                    <Button onClick={handleClose} disabled={submitting}>
+                    <Button onClick={closeDialog} disabled={isSubmitting}>
                         Annuller
                     </Button>
                     <Button
-                        onClick={handleCreate}
+                        onClick={handleCreateMeeting}
                         variant="contained"
                         disableElevation
-                        disabled={!canSubmit || submitting || !onCreateMeeting}
+                        disabled={!canSubmitForm || isSubmitting || !canCreateMeeting}
                     >
-                        {submitting ? "Opretter…" : "Opret"}
+                        {isSubmitting ? "Opretter…" : "Opret"}
                     </Button>
                 </DialogActions>
             </Dialog>

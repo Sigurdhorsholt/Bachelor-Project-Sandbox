@@ -25,9 +25,9 @@ export default function AdminLiveMonitorOverview({
     const { data: agendaList = [] } = useGetAgendaWithPropositionsQuery(meetingId);
     
     const openVotation = openVotations.find(v => v.meetingId === meetingId);
-    
+
     // Find selected proposition from agenda data
-    const selectedProposition = selectedAgendaId && selectedPropositionId 
+    const selectedProposition = selectedAgendaId && selectedPropositionId
         ? agendaList.find((a: any) => a.id === selectedAgendaId)?.propositions?.find((p: any) => p.id === selectedPropositionId)
         : null;
     
@@ -166,7 +166,7 @@ export default function AdminLiveMonitorOverview({
                                 <Typography variant="body2" color="text.secondary">Status</Typography>
                                 <Chip 
                                     size="small" 
-                                    label={openVotation ? 'Voting open' : voteResults && !voteResults.open ? 'Results available' : 'No active vote'} 
+                                    label={openVotation ? 'Voting open' : voteResults && !voteResults.open ? 'Results available' : 'No active vote'}
                                     color={openVotation ? 'success' : 'default'}
                                     sx={{ mt: 0.5 }}
                                 />

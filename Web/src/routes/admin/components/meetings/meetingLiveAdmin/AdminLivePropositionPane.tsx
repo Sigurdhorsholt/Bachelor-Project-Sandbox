@@ -26,7 +26,7 @@ export function AdminLivePropositionPane({
     selectedProposition,
     setSelectedProposition,
 }: Props) {
-    
+
     const { data: openVotations = [] } = useGetOpenVotationsByMeetingIdQuery(meetingId);
     const [startVote, { isLoading: isOpeningVote }] = useStartVoteAndCreateVotationMutation();
     const [stopVote, { isLoading: isClosingVote }] = useStopVotationMutation();
@@ -106,8 +106,8 @@ export function AdminLivePropositionPane({
                                                 // Normal selection style
                                                 '&.Mui-selected': {
                                                     bgcolor: (t) => isOpenForVoting ? t.palette.success.light : t.palette.action.selected,
-                                                    borderLeft: (t) => isOpenForVoting 
-                                                        ? `4px solid ${t.palette.success.main}` 
+                                                    borderLeft: (t) => isOpenForVoting
+                                                        ? `4px solid ${t.palette.success.main}`
                                                         : `3px solid ${t.palette.primary.main}`,
                                                     pl: 1.5,
                                                     color: (t) => t.palette.text.primary,

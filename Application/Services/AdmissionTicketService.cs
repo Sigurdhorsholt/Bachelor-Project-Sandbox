@@ -7,7 +7,7 @@ namespace Application.Services;
 
 public class AdmissionTicketService : IAdmissionTicketService
 {
-    private readonly AppDbContext _dbContext;
+    private AppDbContext _dbContext;
     private static readonly char[] Alph = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".ToCharArray();
     private readonly int _length = 8;
 
@@ -70,6 +70,31 @@ public class AdmissionTicketService : IAdmissionTicketService
         if (count > 0)
             await GenerateAsync(meetingId, count, cancellationToken);
         await tx.CommitAsync(cancellationToken);
+    }
+
+    public async Task CreateWithCodeAsync(Guid meetingId, string code, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+            throw new ArgumentException("Code cannot be empty", nameof(code));
+
+        // Ensure meeting exists
+        var meetingExists = await _dbContext.Meetings.AnyAsync(m => m.Id == meetingId, cancellationToken);
+        if (!meetingExists) throw new InvalidOperationException("Meeting not found");
+
+        // Check if code already exists
+        var exists = await _dbContext.AdmissionTickets.AnyAsync(t => t.Code == code, cancellationToken);
+        if (exists) throw new InvalidOperationException($"Admission ticket with code '{code}' already exists");
+
+        var ticket = new AdmissionTicket
+        {
+            Id = Guid.NewGuid(),
+            MeetingId = meetingId,
+            Code = code,
+            Used = false
+        };
+
+        _dbContext.Add(ticket);
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private string GenerateCode()
